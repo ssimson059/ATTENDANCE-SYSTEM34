@@ -1,0 +1,88 @@
+{% extends "admin/layout.html" %}
+{% block title %}Library – SINCET{% endblock %}
+{% block heading %}📖 Library{% endblock %}
+{% block content %}
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+  <div class="stat glass rise d1" style="--c:#3b82f6"><div class="ic">📚</div><div class="num" id="sTitles">0</div><div class="lbl">Titles / <span id="sCopies">0</span> copies</div></div>
+  <div class="stat glass rise d1" style="--c:#22d3ee"><div class="ic">📤</div><div class="num" id="sIssued">0</div><div class="lbl">Currently issued</div></div>
+  <div class="stat glass rise d2" style="--c:#f43f5e"><div class="ic">⏰</div><div class="num" id="sOver">0</div><div class="lbl">Overdue</div></div>
+  <div class="stat glass rise d2" style="--c:#f5b942"><div class="ic">₹</div><div class="num" id="sFine">0</div><div class="lbl">Fines outstanding</div></div>
+</div>
+<nav class="tabbar" style="margin-top:18px"><button class="btn sm" data-tab="issue">📤 Issue / Return</button><button class="btn sm" data-tab="books">📚 Catalogue</button><button class="btn sm" data-tab="records">🧾 Records &amp; Fines</button></nav>
+
+<section data-pane="issue"><div class="grid g2">
+  <div class="card glass rise d1"><h3>Issue a book</h3>
+    <p class="muted" style="margin-top:0">Loan {{ loan_days }} days · fine ₹{{ '%g'|format(fine) }}/day after due date · max {{ max_books }} books per student.</p>
+    <div class="field"><label>Student ID</label><div class="bar" style="margin:0"><input class="inp" id="iStu" placeholder="e.g. 23AIDS001" style="flex:2"><button class="btn ghost" id="iLook">Check</button></div></div>
+    <div id="iInfo" class="tip info" style="display:none"></div>
+    <div class="field"><label>Book</label><input class="inp" id="iQ" placeholder="🔍 Search title / author / accession no."><select class="inp" id="iBook" size="5" style="margin-top:8px;height:auto;width:100%;padding:6px"></select></div>
+    <button class="btn good" id="iGo">Issue book</button></div>
+  <div class="card glass rise d2"><h3>Return a book</h3>
+    <div class="bar"><input class="inp" id="rQ" placeholder="🔍 Student ID / name / book" style="flex:2"></div>
+    <div class="tw" style="max-height:360px"><table><thead><tr><th>Student</th><th>Book</th><th>Due</th><th></th></tr></thead><tbody id="rBody"></tbody></table></div></div>
+</div></section>
+
+<section data-pane="books" hidden><div class="grid g2">
+  <div class="card glass rise d1"><h3>Add book</h3>
+    <div class="field"><label>Title</label><input class="inp" id="bT" maxlength="200"></div>
+    <div class="field"><label>Author</label><input class="inp" id="bA" maxlength="120"></div>
+    <div class="grid g2" style="gap:12px"><div class="field"><label>Category</label><input class="inp" id="bC" maxlength="60" placeholder="e.g. Computer Science"></div><div class="field"><label>ISBN</label><input class="inp" id="bI" maxlength="20"></div>
+      <div class="field"><label>Copies</label><input class="inp" type="number" id="bN" value="1" min="1" max="500"></div><div class="field"><label>Rack</label><input class="inp" id="bR" maxlength="20" placeholder="e.g. R3-B"></div></div>
+    <div class="field"><label>Accession no. <small class="muted">(blank = auto)</small></label><input class="inp" id="bAcc" maxlength="30"></div>
+    <button class="btn" id="bAdd">Add to catalogue</button></div>
+  <div class="card glass rise d2"><h3>Catalogue</h3><input class="inp" id="bQ" placeholder="🔍 Search" style="margin-bottom:10px">
+    <div class="tw" style="max-height:420px"><table><thead><tr><th>Acc.</th><th>Title</th><th>Stock</th><th></th></tr></thead><tbody id="bBody"></tbody></table></div></div>
+</div></section>
+
+<section data-pane="records" hidden><div class="card glass rise d1">
+  <div class="bar"><select class="inp" id="fSt" style="max-width:200px"><option value="active">Currently issued</option><option value="overdue">Overdue</option><option value="fines">Pending fines</option><option value="returned">Returned</option><option value="all">All</option></select>
+    <input class="inp" id="fQ" placeholder="🔍 Student / book" style="flex:2"><a class="btn ghost sm" href="{{ url_for('feat.admin_library_csv') }}">⬇ CSV</a></div>
+  <div class="tw"><table><thead><tr><th>Student</th><th>Book</th><th>Issued</th><th>Due</th><th>Returned</th><th>Fine</th><th></th></tr></thead><tbody id="fBody"></tbody></table></div></div></section>
+{% endblock %}
+{% block scripts %}
+<script>
+const inr = v => '₹' + Number(v || 0).toLocaleString('en-IN');
+async function stats() { const s = await api('/admin/api/library/stats');
+  $('#sTitles').textContent = s.titles; $('#sCopies').textContent = s.copies; $('#sIssued').textContent = s.issued; $('#sOver').textContent = s.overdue; $('#sFine').textContent = inr(s.live_fines + s.pending_fines); }
+const dueCell = r => r.returned_on ? '–' : `${esc(r.due_on)}${r.overdue_days ? ` <span class="pill danger">${r.overdue_days}d late</span>` : ''}`;
+// ---- issue
+async function pickBooks() { const r = await api('/admin/api/library/books?q=' + encodeURIComponent($('#iQ').value));
+  $('#iBook').innerHTML = r.rows.map(b => `<option value="${b.id}" ${b.available < 1 ? 'disabled' : ''}>${esc(b.title)} · ${esc(b.accession_no)} · ${b.available ? b.available + ' left' : 'all issued'}</option>`).join(''); }
+$('#iQ').oninput = debounce(() => pickBooks().catch(() => {}));
+$('#iLook').onclick = async () => { const box = $('#iInfo'); box.style.display = '';
+  try { const r = await api('/admin/api/library/student?id=' + encodeURIComponent($('#iStu').value.trim())); const s = r.student;
+    box.className = 'tip ' + (r.dues > 0 ? 'warn' : 'good'); box.innerHTML = `<b>${esc(s.name)}</b> · ${esc(s.dept)} Y${s.year_no || '–'} · holding ${r.holding}/${r.max_books}` + (r.dues > 0 ? ` · <b>dues ${inr(r.dues)}</b> (clear before issuing)` : ' · no dues'); }
+  catch (e) { box.className = 'tip danger'; box.textContent = e.message; } };
+$('#iGo').onclick = async e => { busy(e.target, true);
+  try { const r = await api('/admin/api/library/issue', 'POST', { student: $('#iStu').value, book: $('#iBook').value }); toast(r.message); $('#iLook').click(); pickBooks(); returns(); stats(); }
+  catch (err) { toast(err.message, 'err'); } busy(e.target, false); };
+// ---- return
+async function returns() { const r = await api('/admin/api/library/issues?status=active&q=' + encodeURIComponent($('#rQ').value));
+  $('#rBody').innerHTML = r.rows.length ? r.rows.map(x => `<tr><td class="mono">${esc(x.username)}<br><small class="muted">${esc(x.student)}</small></td><td>${esc(x.title)}</td><td>${dueCell(x)}${x.live_fine ? `<br><small>${inr(x.live_fine)}</small>` : ''}</td>` +
+    `<td><button class="btn sm" data-ret="${x.id}">Return</button></td></tr>`).join('') : '<tr><td colspan="4" class="empty">No issued books.</td></tr>'; }
+$('#rQ').oninput = debounce(() => returns().catch(() => {}));
+// ---- catalogue
+async function books() { const r = await api('/admin/api/library/books?q=' + encodeURIComponent($('#bQ').value));
+  $('#bBody').innerHTML = r.rows.length ? r.rows.map(b => `<tr><td class="mono">${esc(b.accession_no)}</td><td><b>${esc(b.title)}</b><br><small class="muted">${esc(b.author)} · ${esc(b.category)}${b.rack ? ' · ' + esc(b.rack) : ''}</small></td>` +
+    `<td><span class="pill ${b.available ? 'good' : 'danger'}">${b.available}/${b.copies}</span></td><td><button class="btn danger sm" data-bdel="${b.id}">✖</button></td></tr>`).join('') : '<tr><td colspan="4" class="empty">No books found.</td></tr>'; }
+$('#bQ').oninput = debounce(() => books().catch(() => {}));
+$('#bAdd').onclick = async e => { busy(e.target, true);
+  try { const r = await api('/admin/api/library/books', 'POST', { title: $('#bT').value, author: $('#bA').value, category: $('#bC').value, isbn: $('#bI').value, copies: $('#bN').value, rack: $('#bR').value, accession_no: $('#bAcc').value });
+    toast('Added · ' + r.accession_no); ['bT','bA','bC','bI','bR','bAcc'].forEach(i => $('#' + i).value = ''); books(); pickBooks(); stats(); } catch (err) { toast(err.message, 'err'); } busy(e.target, false); };
+// ---- records
+async function records() { const st = $('#fSt').value; const r = await api(`/admin/api/library/issues?status=${st}&q=` + encodeURIComponent($('#fQ').value));
+  $('#fBody').innerHTML = r.rows.length ? r.rows.map(x => `<tr><td class="mono">${esc(x.username)}<br><small class="muted">${esc(x.student)}</small></td><td>${esc(x.title)}</td><td>${esc(x.issued_on)}</td><td>${dueCell(x)}</td><td>${esc(x.returned_on || '–')}</td>` +
+    `<td>${x.live_fine ? inr(x.live_fine) : '–'} ${x.fine_status === 'due' ? '<span class="pill warn">due</span>' : x.fine_status === 'paid' ? '<span class="pill good">paid</span>' : x.fine_status === 'waived' ? '<span class="pill info">waived</span>' : ''}</td>` +
+    `<td>${x.fine_status === 'due' ? `<div class="acts"><button class="btn good sm" data-fine="paid" data-id="${x.id}">Paid</button><button class="btn ghost sm" data-fine="waived" data-id="${x.id}">Waive</button></div>` : !x.returned_on ? `<button class="btn sm" data-ret="${x.id}">Return</button>` : ''}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">No records.</td></tr>'; }
+$('#fSt').onchange = () => records(); $('#fQ').oninput = debounce(() => records().catch(() => {}));
+document.addEventListener('click', async e => {
+  const r = e.target.closest('[data-ret]'), f = e.target.closest('[data-fine]'), d = e.target.closest('[data-bdel]');
+  try {
+    if (r) { const x = await api(`/admin/api/library/return/${r.dataset.ret}`, 'POST', {}); toast(x.message, x.fine ? 'err' : 'ok'); refresh(); }
+    if (f) { await api(`/admin/api/library/fine/${f.dataset.id}`, 'POST', { action: f.dataset.fine }); toast('Fine updated ✔'); refresh(); }
+    if (d && confirm('Delete this book from the catalogue?')) { await api(`/admin/api/library/books/${d.dataset.bdel}`, 'DELETE'); refresh(); }
+  } catch (err) { toast(err.message, 'err'); } });
+function refresh() { Promise.all([stats(), returns(), books(), records(), pickBooks()]).catch(e => toast(e.message, 'err')); }
+refresh();
+</script>
+{% endblock %}

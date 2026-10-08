@@ -1,0 +1,43 @@
+{% extends "admin/layout.html" %}
+{% block title %}Reminders – SINCET{% endblock %}
+{% block heading %}🔔 Fee reminders &amp; contacts{% endblock %}
+{% block content %}
+<div class="grid g2">
+  <div class="card glass rise d1"><h3>Automatic fee-due reminders</h3>
+    <p class="muted" style="margin-top:0">Reminders go out <b>{{ reminder_days }}</b> day(s) before the due date and weekly once overdue, on: <b>{{ reminder_channels|join(', ') or 'no channel' }}</b>. Each reminder is sent only once.</p>
+    <div class="bar">{% for c, ok in channels.items() %}<span class="pill {{ 'good' if ok else 'warn' }}">{{ c }}: {{ 'live' if ok else 'dry-run (not configured)' }}</span>{% endfor %}
+      <span class="pill {{ 'good' if gateway else 'warn' }}">payment gateway: {{ 'Razorpay live' if gateway else 'off (manual verify)' }}</span></div>
+    <button class="btn" id="run">▶ Send due reminders now</button> <span class="muted" id="runMsg"></span>
+    <p class="muted"><small>Run it daily automatically: <code>python send_reminders.py</code> in cron / Task Scheduler, or call <code>/internal/cron/reminders?token=CRON_TOKEN</code> from a free scheduler.</small></p></div>
+  <div class="card glass rise d2"><h3>Import contacts (CSV)</h3>
+    <p class="muted" style="margin-top:0">Columns: <code>username,phone,email,parent_phone,parent_email</code></p>
+    <input type="file" id="csv" accept=".csv,text/csv"> <button class="btn sm" id="imp">Import</button> <p class="muted" id="impMsg"></p></div>
+</div>
+<div class="card glass rise d3" style="margin-top:18px"><h3>Student contacts</h3>
+  <div class="bar"><input class="inp" id="q" placeholder="🔍 Search student" style="flex:2"><select class="inp" id="fd"><option value="">All departments</option>{% for d in depts %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select></div>
+  <div class="tw" style="max-height:44vh"><table><thead><tr><th>Student</th><th>Dept</th><th>Phone</th><th>Email</th><th>Parent phone</th><th>Parent email</th><th></th></tr></thead><tbody id="cbody"></tbody></table></div></div>
+<div class="card glass rise d4" style="margin-top:18px"><h3>Message log</h3>
+  <div class="bar"><select class="inp" id="os" style="max-width:180px"><option value="">All</option><option value="sent">Sent</option><option value="logged">Dry-run</option><option value="failed">Failed</option></select></div>
+  <div class="tw" style="max-height:40vh"><table><thead><tr><th>Time</th><th>Channel</th><th>To</th><th>Type</th><th>Status</th><th>Message</th></tr></thead><tbody id="obody"></tbody></table></div></div>
+<div class="modal" id="cM"><div class="box glass"><h3>Contact – <span id="cName"></span></h3>
+  {% for k, l in [('phone','Student phone'),('email','Student email'),('parent_phone','Parent phone'),('parent_email','Parent email')] %}<div class="field"><label>{{ l }}</label><input class="inp" id="c_{{ k }}" maxlength="120"></div>{% endfor %}
+  <div class="row-end"><button class="btn ghost" data-close>Cancel</button><button class="btn" id="cSave">Save</button></div></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+let rows = [], cur = null; const PILL = { sent: 'good', logged: 'info', failed: 'danger' };
+async function loadC() { const r = await api('/admin/api/notify/contacts?' + new URLSearchParams({ q: $('#q').value.trim(), dept: $('#fd').value })); rows = r.rows;
+  $('#cbody').innerHTML = rows.length ? rows.map((x, i) => `<tr><td>${esc(x.username)}<br><small class="muted">${esc(x.name)}</small></td><td>${esc(x.dept)}</td><td>${esc(x.phone || '–')}</td><td>${esc(x.email || '–')}</td><td>${esc(x.parent_phone || '–')}</td><td>${esc(x.parent_email || '–')}</td><td><button class="btn ghost sm" data-ed="${i}">✎</button></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No students.</td></tr>'; }
+async function loadO() { const r = await api('/admin/api/notify/outbox?status=' + $('#os').value);
+  $('#obody').innerHTML = r.rows.length ? r.rows.map(x => `<tr><td>${esc(x.created_at)}</td><td>${esc(x.channel)}</td><td>${esc(x.recipient)}</td><td>${esc(x.kind)}</td><td><span class="pill ${PILL[x.status]}" title="${esc(x.error || '')}">${esc(x.status)}</span></td><td style="white-space:normal;max-width:380px">${esc(x.body)}</td></tr>`).join('') : '<tr><td colspan="6" class="empty">No messages yet.</td></tr>'; }
+const go = () => Promise.all([loadC(), loadO()]).catch(e => toast(e.message, 'err')); go();
+$('#q').oninput = debounce(() => loadC().catch(e => toast(e.message, 'err'))); $('#fd').onchange = () => loadC(); $('#os').onchange = () => loadO();
+document.addEventListener('click', e => { const b = e.target.closest('[data-ed]'); if (!b) return; cur = rows[b.dataset.ed]; $('#cName').textContent = cur.username;
+  ['phone', 'email', 'parent_phone', 'parent_email'].forEach(k => $('#c_' + k).value = cur[k] || ''); openModal('cM'); });
+$('#cSave').onclick = async () => { try { await api('/admin/api/notify/contacts', 'POST', { student_id: cur.id, phone: $('#c_phone').value, email: $('#c_email').value, parent_phone: $('#c_parent_phone').value, parent_email: $('#c_parent_email').value }); closeModal('cM'); toast('Saved ✔'); loadC(); } catch (e) { toast(e.message, 'err'); } };
+$('#run').onclick = async e => { busy(e.target, true); try { const r = await api('/admin/api/notify/reminders/run', 'POST', {});
+  $('#runMsg').textContent = `${r.considered} due fee(s): sent ${r.sent}, dry-run ${r.logged}, failed ${r.failed}, already sent ${r.duplicate}, no contact ${r.no_contact}`; loadO(); } catch (err) { toast(err.message, 'err'); } busy(e.target, false); };
+$('#imp').onclick = async () => { const f = $('#csv').files[0]; if (!f) return toast('Choose a CSV file', 'err');
+  try { const r = await api('/admin/api/notify/contacts/import', 'POST', { csv: await f.text() }); $('#impMsg').textContent = `Saved ${r.saved}; skipped ${r.skipped_count}` + (r.skipped.length ? ' (' + r.skipped.join(', ') + ')' : ''); loadC(); } catch (e) { toast(e.message, 'err'); } };
+</script>
+{% endblock %}

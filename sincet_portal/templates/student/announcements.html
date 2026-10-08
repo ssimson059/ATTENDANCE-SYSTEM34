@@ -1,0 +1,12 @@
+{% extends "student/_shell.html" %}
+{% block title %}Announcements – SINCET{% endblock %}
+{% block heading %}📢 Announcements{% endblock %}
+{% block content %}
+{% for a in rows %}
+<div class="card glass rise d1" style="margin-bottom:14px">
+  <h3 style="margin-bottom:6px">{% if a.pinned %}📌 {% endif %}{{ a.title }}</h3>
+  <small class="muted">{{ a.author_name }} ({{ a.author_role|title }}) · {{ a.created_at[:16] }}</small>
+  <p style="white-space:pre-wrap;margin:10px 0 0">{{ a.body }}</p>
+</div>
+{% else %}<div class="card glass"><p class="empty">No announcements right now.</p></div>{% endfor %}
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends "admin/layout.html" %}
+{% block title %}Fees &amp; Payments – SINCET{% endblock %}
+{% block heading %}💳 Fees &amp; Payments{% endblock %}
+{% block content %}
+<div class="grid g3">
+  <div class="stat glass rise d1" style="--c:#22c55e"><div class="ic">✅</div><div class="num" id="sRec">₹0</div><div class="lbl">Collected (received)</div></div>
+  <div class="stat glass rise d1" style="--c:#f59e0b"><div class="ic">⏳</div><div class="num" id="sPend">0</div><div class="lbl">Awaiting verification</div></div>
+  <div class="stat glass rise d1" style="--c:#f43f5e"><div class="ic">📌</div><div class="num" id="sOut">₹0</div><div class="lbl">Outstanding</div></div>
+</div>
+
+<div class="card glass rise d2" style="margin-top:18px">
+  <div class="bar">
+    <button class="btn sm" id="tabP">Payments received</button>
+    <button class="btn ghost sm" id="tabR">Fee records</button>
+    <input class="inp" id="q" placeholder="🔍 Search student / reference" style="flex:2">
+    <select class="inp" id="fStatus"><option value="">All payments</option><option value="pending" selected>Pending</option><option value="received">Received</option><option value="rejected">Rejected</option></select>
+    <select class="inp" id="fDept" style="display:none"><option value="">All departments</option>{% for d in depts %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select>
+    <button class="btn sm" id="assignBtn">＋ Assign fee</button>
+  </div>
+  <div class="tw"><table><thead id="head"></thead><tbody id="body"></tbody></table></div>
+  <p class="muted" id="count" style="margin:10px 2px 0"></p>
+</div>
+
+<div class="modal" id="assignM"><div class="box glass">
+  <h3>Assign fee</h3>
+  <div class="field"><label>Fee title</label><input class="inp" id="aTitle" maxlength="120" placeholder="Semester 3 Tuition"></div>
+  <div class="field"><label>Amount (₹)</label><input class="inp" id="aAmt" type="number" min="1" step="0.01"></div>
+  <div class="field"><label>Due date (optional)</label><input class="inp" id="aDue" type="date"></div>
+  <div class="field"><label>Department</label><select class="inp" id="aDept"><option value="">All departments</option>{% for d in depts %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select></div>
+  <div class="field"><label>Year</label><select class="inp" id="aYear"><option value="">All years</option>{% for i in range(1,5) %}<option value="{{ i }}">Year {{ i }}</option>{% endfor %}</select></div>
+  <div class="field"><label>…or a single student ID (overrides department / year)</label><input class="inp" id="aStu" maxlength="40" placeholder="STU-CSE-001"></div>
+  <div class="row-end"><button class="btn ghost" data-close>Cancel</button><button class="btn" id="aGo">Assign</button></div>
+</div></div>
+
+<div class="modal" id="rejM"><div class="box glass"><h3>Reject payment</h3>
+  <div class="field"><label>Reason (shown to the student)</label><input class="inp" id="rejNote" maxlength="200"></div>
+  <div class="row-end"><button class="btn ghost" data-close>Cancel</button><button class="btn danger" id="rejGo">Reject</button></div></div></div>
+<div class="modal" id="delM"><div class="box glass"><h3>Delete fee?</h3><p class="muted">Removes this fee from the student. Not allowed once a payment has been received.</p>
+  <div class="row-end"><button class="btn ghost" data-close>Cancel</button><button class="btn danger" id="delOk">Delete</button></div></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+const inr = v => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+let tab = 'pay', rows = [], rejId = null, delId = null;
+const PILL = { pending: 'info', received: 'good', rejected: 'danger', Paid: 'good', 'Awaiting verification': 'info', 'Partly paid': 'warn', Unpaid: 'danger' };
+
+async function load() {
+  try {
+    if (tab === 'pay') {
+      const p = new URLSearchParams({ q: $('#q').value.trim(), status: $('#fStatus').value });
+      const r = await api('/admin/api/fees/payments?' + p); rows = r.rows;
+      $('#sRec').textContent = inr(r.summary.received); $('#sPend').textContent = r.summary.pending_n + ' · ' + inr(r.summary.pending_amt); $('#sOut').textContent = inr(r.summary.outstanding);
+      $('#head').innerHTML = '<tr>' + ['Date', 'Student', 'Dept', 'Fee', 'Amount', 'Method', 'Reference', 'Status', 'Receipt', 'Actions'].map(h => `<th>${h}</th>`).join('') + '</tr>';
+      $('#body').innerHTML = rows.length ? rows.map(r => `<tr><td>${esc(r.paid_at)}</td><td>${esc(r.username)}<br><small class="muted">${esc(r.student_name)}</small></td><td>${esc(r.department)}</td><td>${esc(r.title)}</td><td>${inr(r.amount)}</td><td>${esc(r.method)}</td><td class="mono">${esc(r.reference || '—')}</td>` +
+        `<td><span class="pill ${PILL[r.status]}" title="${esc(r.note || '')}">${esc(r.status)}</span></td><td class="mono">${esc(r.receipt_no || '—')}</td>` +
+        `<td>${r.status === 'pending' ? `<div class="acts"><button class="btn good sm" data-rec="${r.id}">✔ Received</button><button class="btn danger sm" data-rej="${r.id}">✖</button></div>` : (r.status === 'received' ? `<a class="btn ghost sm" href="/admin/fees/receipt/${r.id}.pdf" target="_blank">📄 Receipt</a>` : '—')}</td></tr>`).join('')
+        : '<tr><td colspan="10" class="empty">No payments found.</td></tr>';
+    } else {
+      const p = new URLSearchParams({ q: $('#q').value.trim(), dept: $('#fDept').value });
+      rows = (await api('/admin/api/fees/records?' + p)).rows;
+      $('#head').innerHTML = '<tr>' + ['Student', 'Dept', 'Fee', 'Amount', 'Received', 'Pending', 'Balance', 'Due', 'Status', ''].map(h => `<th>${h}</th>`).join('') + '</tr>';
+      $('#body').innerHTML = rows.length ? rows.map(r => `<tr><td>${esc(r.username)}<br><small class="muted">${esc(r.student_name)}</small></td><td>${esc(r.department)}</td><td>${esc(r.title)}</td><td>${inr(r.amount)}</td><td>${inr(r.paid)}</td><td>${inr(r.pending)}</td><td>${inr(r.balance)}</td><td>${esc(r.due_date || '—')}</td>` +
+        `<td><span class="pill ${PILL[r.status]}">${esc(r.status)}</span></td><td><button class="btn danger sm" data-del="${r.id}">🗑</button></td></tr>`).join('')
+        : '<tr><td colspan="10" class="empty">No fees assigned yet.</td></tr>';
+    }
+    $('#count').textContent = rows.length + ' record(s)';
+  } catch (e) { toast(e.message, 'err'); }
+}
+function setTab(t) {
+  tab = t; $('#tabP').className = 'btn sm' + (t === 'pay' ? '' : ' ghost'); $('#tabR').className = 'btn sm' + (t === 'rec' ? '' : ' ghost');
+  $('#fStatus').style.display = t === 'pay' ? '' : 'none'; $('#fDept').style.display = t === 'rec' ? '' : 'none'; load();
+}
+$('#tabP').onclick = () => setTab('pay'); $('#tabR').onclick = () => setTab('rec');
+$('#q').addEventListener('input', debounce(load)); $('#fStatus').onchange = load; $('#fDept').onchange = load;
+$('#body').addEventListener('click', async e => {
+  const rec = e.target.closest('[data-rec]'), rej = e.target.closest('[data-rej]'), del = e.target.closest('[data-del]');
+  if (rec) { try { const r = await api(`/admin/api/fees/payments/${rec.dataset.rec}/review`, 'POST', { action: 'receive' }); toast('Received – receipt ' + r.receipt_no + ' (student can now download it)'); load(); } catch (x) { toast(x.message, 'err'); } }
+  if (rej) { rejId = rej.dataset.rej; $('#rejNote').value = ''; openModal('rejM'); }
+  if (del) { delId = del.dataset.del; openModal('delM'); }
+});
+$('#rejGo').onclick = async () => { try { await api(`/admin/api/fees/payments/${rejId}/review`, 'POST', { action: 'reject', note: $('#rejNote').value }); closeModal('rejM'); toast('Payment rejected'); load(); } catch (x) { toast(x.message, 'err'); } };
+$('#delOk').onclick = async () => { try { await api('/admin/api/fees/' + delId, 'DELETE'); closeModal('delM'); toast('Fee deleted'); load(); } catch (x) { closeModal('delM'); toast(x.message, 'err'); } };
+$('#assignBtn').onclick = () => openModal('assignM');
+$('#aGo').onclick = async () => {
+  const b = $('#aGo'); busy(b, true);
+  try {
+    const r = await api('/admin/api/fees/assign', 'POST', { title: $('#aTitle').value, amount: $('#aAmt').value, due_date: $('#aDue').value, dept: $('#aDept').value, year: $('#aYear').value, student: $('#aStu').value });
+    closeModal('assignM'); toast(`Fee assigned to ${r.created} student(s)` + (r.skipped ? ` (${r.skipped} already had it)` : '')); setTab('rec');
+  } catch (x) { toast(x.message, 'err'); } finally { busy(b, false); }
+};
+setInterval(() => { if (tab === 'pay' && !document.querySelector('.modal.open')) load(); }, 20000);   // new student payments show up automatically
+load();
+</script>
+{% endblock %}

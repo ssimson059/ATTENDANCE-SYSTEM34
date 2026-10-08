@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+{% block title %}Student Dashboard – SINCET{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block body %}
+{% set ov = rep.overall %}
+<main class="main" style="max-width:1200px;margin:auto">
+  <header class="top">
+    <div class="brand"><div class="logo"><img src="{{ url_for('static', filename='img/logo.png') }}" alt=""></div>
+      <div><b>Student Dashboard</b><small>{{ me.dept_name }}{% if me.year_no %} · Year {{ me.year_no }}{% endif %}{% if me.section_name %} · Sec {{ me.section_name }}{% endif %}</small></div></div>
+    <div class="who"><div style="text-align:right"><b>{{ me.name }}</b><br><small class="muted">{{ me.username }}</small></div>
+      <a class="btn ghost sm" href="{{ password_url() }}">🔑</a><a class="btn ghost sm" href="{{ logout_url() }}">Logout</a></div>
+  </header>
+
+  <nav class="tabbar" id="tabs">
+    <button class="btn sm" data-tab="home">🏠 Overview</button>
+    <button class="btn sm" data-tab="attendance">📊 Attendance</button>
+    <button class="btn sm" data-tab="insights">🤖 AI Insights</button>
+    <button class="btn sm" data-tab="marks">📈 Marks</button>
+    <button class="btn sm" data-tab="assign">📝 Assignment marks</button>
+    <button class="btn sm" data-tab="fees">💳 Fees</button>
+    <span class="sep"></span>
+    <a class="btn ghost sm" href="{{ url_for('feat.student_assignments_page') }}">📎 Submit assignment</a>
+    <a class="btn ghost sm" href="{{ url_for('feat.student_timetable_page') }}">🕒 Timetable &amp; hall ticket</a>
+    <a class="btn ghost sm" href="{{ url_for('feat.student_leave_page') }}">🗓️ Leave / OD</a>
+    <a class="btn ghost sm" href="{{ url_for('feat.student_results_page') }}">🎓 Results &amp; CGPA</a>
+    <a class="btn ghost sm" href="{{ url_for('feat.student_materials_page') }}">📚 Study materials</a>
+    <a class="btn ghost sm" href="{{ url_for('feat.student_library_page') }}">📖 Library</a>
+    <a class="btn ghost sm" href="{{ url_for('feat.student_feedback_page') }}">⭐ Faculty feedback</a>
+    <a class="btn ghost sm" href="{{ url_for('feat.student_announcements_page') }}">📢 Announcements</a>
+  </nav>
+
+  <section data-pane="home">
+    <div class="card glass rise d1" style="margin-bottom:16px;padding:14px 18px"><h3 style="margin-bottom:6px">📢 Latest announcements</h3><div id="annBox"></div></div>
+  <div class="grid g2">
+    <div class="card glass rise d1"><h3>👤 My profile</h3>
+      <div class="grid g2" style="gap:10px">
+        <div><small class="muted">Name</small><br><b>{{ me.name }}</b></div>
+        <div><small class="muted">Student ID</small><br><b class="mono">{{ me.username }}</b></div>
+        <div><small class="muted">Department</small><br><b>{{ me.dept_name }}</b></div>
+        <div><small class="muted">Year / Section</small><br><b>{{ me.year_no or '–' }} / {{ me.section_name or '–' }}</b></div>
+      </div></div>
+    <div class="card glass rise d1"><h3>🤖 AI attendance <span class="pill info" id="ciState">Checking…</span></h3>
+      <div id="ciNone" class="muted">No class is open right now. When your faculty starts a class, keep this page open and your attendance is marked automatically.</div>
+      <div id="ciLive" style="display:none">
+        <p style="margin:0 0 8px"><b id="ciSub"></b> <small class="muted">· closes in <b id="ciEnds"></b></small></p>
+        <div class="tip info" id="ciMsg" style="margin:0">AI is verifying your presence… keep this page open.</div>
+        <button class="btn" id="qrOpen" style="width:100%;margin-top:12px">📷 Scan class QR</button>
+        <details style="margin-top:12px"><summary class="muted" style="cursor:pointer;font-size:.85rem">Location not working? Use the class code</summary>
+          <div class="field" style="margin-top:10px"><label for="ciCode">6-digit code on the classroom screen</label>
+            <input class="inp codein" id="ciCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="000000"></div>
+          <button class="btn good" id="ciBtn" style="width:100%">Mark me present</button></details>
+      </div>
+      <div id="ciDone" class="tip good" style="display:none">✔ Your attendance is marked for <b id="ciDoneSub"></b>.</div>
+    </div>
+  </div>
+
+  </section>
+
+  <section data-pane="attendance" hidden>
+  <div class="grid g3" style="margin-top:18px">
+    <div class="card glass rise d1 center">
+      <h3>Overall Attendance</h3>
+      <div style="display:grid;place-items:center">
+        <div class="ring" id="ring" style="--rc:{{ 'var(--green)' if ov is not none and ov >= 80 else ('var(--amber)' if ov is not none and ov >= threshold else 'var(--red)') }}"><b id="ringNum">0%</b></div></div>
+      <p class="muted" style="margin:12px 0 0">{{ rep.present }} present of {{ rep.total }} classes</p>
+      {% if ov is not none and ov < threshold %}<span class="pill danger">Below {{ threshold|int }}% requirement</span>{% endif %}
+    </div>
+    <div class="card glass rise d2" style="grid-column:span 2">
+      <h3>Subject-wise Attendance</h3>
+      {% for s in rep.subjects %}
+      <div class="sub-row"><div class="h"><span><b>{{ s.code }}</b> <span class="muted">{{ s.name }}</span></span><span>{{ (s.pct ~ '%') if s.pct is not none else 'No classes' }} <small class="muted">({{ s.present }}/{{ s.total }})</small></span></div>
+        <div class="prog"><i data-w="{{ s.pct or 0 }}" style="--pc:{{ 'var(--green)' if s.pct is not none and s.pct >= 80 else ('var(--amber)' if s.pct is not none and s.pct >= threshold else 'var(--red)') }}"></i></div></div>
+      {% else %}<div class="empty">No subjects assigned yet.</div>{% endfor %}
+    </div>
+  </div>
+
+
+  <div style="margin-top:18px">
+    <div class="card glass rise d4"><h3>🕘 Attendance History</h3>
+      <div class="tw"><table><thead><tr><th>Date</th><th>Subject</th><th>Status</th><th>Via</th></tr></thead><tbody>
+      {% for h in rep.history %}<tr><td>{{ h.date }}</td><td>{{ h.subject }}</td><td><span class="pill {{ h.status }}">{{ h.status }}</span></td><td>{{ h.method }}</td></tr>
+      {% else %}<tr><td colspan="4" class="empty">No attendance recorded yet.</td></tr>{% endfor %}
+      </tbody></table></div></div>
+  </div>
+  </section>
+
+  <section data-pane="insights" hidden>
+  <div class="grid g2">
+    <div class="card glass rise d3"><h3>🤖 AI Insights &amp; Recommendations</h3>
+      {% for t in tips %}<div class="tip {{ t.level }}">{{ t.text }}</div>{% endfor %}</div>
+    <div class="card glass rise d3"><h3>Performance Analytics</h3>
+      <div class="chart-box" style="height:200px"><canvas id="cTrend"></canvas></div>
+      <div class="chart-box" style="height:200px;margin-top:10px"><canvas id="cMarks"></canvas></div></div>
+  </div>
+
+  </section>
+
+  <section data-pane="marks" hidden>
+  <div class="grid">
+    <div class="card glass rise d4"><h3>📝 Marks</h3>
+      <div class="tw"><table><thead><tr><th>Subject</th><th>Exam</th><th>Marks</th><th>%</th></tr></thead><tbody>
+      {% set ns = namespace(n=0) %}
+      {% for s in rep.subjects %}{% for m in s.marks %}{% set ns.n = ns.n + 1 %}
+        <tr><td>{{ s.code }}</td><td>{{ m.exam_type }}</td><td>{{ m.marks|round(1) }} / {{ m.max_marks|round(0)|int }}</td>
+        <td><span class="pill {{ 'good' if m.marks/m.max_marks >= 0.6 else ('warn' if m.marks/m.max_marks >= 0.4 else 'danger') }}">{{ (100*m.marks/m.max_marks)|round(1) }}%</span></td></tr>
+      {% endfor %}{% endfor %}
+      {% if ns.n == 0 %}<tr><td colspan="4" class="empty">No marks published yet.</td></tr>{% endif %}
+      </tbody></table></div></div>
+  </div>
+
+  </section>
+
+  <section data-pane="assign" hidden>
+  <div class="grid">
+    <div class="card glass rise d4"><h3>📝 Assignments</h3>
+      <div class="tw"><table><thead><tr><th>Assignment</th><th>Subject</th><th>Marks</th><th>%</th></tr></thead><tbody>
+      {% for a in assigns %}<tr><td>{{ a.name }}</td><td>{{ a.subject_code }}</td><td>{{ a.marks|round(1) }} / {{ a.max_marks|round(0)|int }}</td>
+        <td><span class="pill {{ 'good' if a.marks/a.max_marks >= 0.6 else ('warn' if a.marks/a.max_marks >= 0.4 else 'danger') }}">{{ (100*a.marks/a.max_marks)|round(1) }}%</span></td></tr>
+      {% else %}<tr><td colspan="4" class="empty">No assignment marks published yet.</td></tr>{% endfor %}
+      </tbody></table></div></div>
+  </div>
+
+  </section>
+
+  <section data-pane="fees" hidden>
+  <div>
+    <div class="card glass rise d4"><h3>💳 Fees</h3>
+      <div class="tw"><table><thead><tr><th>Fee</th><th>Amount</th><th>Balance</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>
+      {% for f in fees %}<tr><td>{{ f.title }}</td><td>₹{{ '%.2f'|format(f.amount) }}</td><td>₹{{ '%.2f'|format(f.balance) }}</td><td>{{ f.due_date or '–' }}</td>
+        <td><span class="pill {{ 'good' if f.status == 'Paid' else ('info' if f.status == 'Awaiting verification' else ('warn' if f.status == 'Partly paid' else 'danger')) }}">{{ f.status }}</span></td>
+        <td>{% if f.balance > 0 %}<button class="btn sm" data-pay="{{ f.id }}" data-title="{{ f.title }}" data-bal="{{ '%.2f'|format(f.balance) }}">Pay</button>{% endif %}</td></tr>
+      {% else %}<tr><td colspan="6" class="empty">No fees assigned yet.</td></tr>{% endfor %}
+      </tbody></table></div>
+      {% if pays %}<h3 style="margin-top:18px;font-size:1rem">Payment history</h3>
+      <div class="tw"><table><thead><tr><th>Date</th><th>Fee</th><th>Amount</th><th>Method</th><th>Status</th><th>Receipt</th></tr></thead><tbody>
+      {% for p in pays %}<tr><td>{{ p.paid_at[:10] }}</td><td>{{ p.title }}</td><td>₹{{ '%.2f'|format(p.amount) }}</td><td>{{ p.method }}</td>
+        <td><span class="pill {{ 'good' if p.status == 'received' else ('danger' if p.status == 'rejected' else 'info') }}" title="{{ p.note or '' }}">{{ {'received': 'Received', 'rejected': 'Rejected', 'pending': 'Pending'}[p.status] }}</span></td>
+        <td class="mono">{{ p.receipt_no or '–' }}{% if p.status == 'received' %} <a class="btn ghost sm" href="{{ url_for('feat.student_receipt', pid=p.id) }}" target="_blank">📄 PDF</a>{% endif %}</td></tr>{% endfor %}
+      </tbody></table></div>{% endif %}
+    </div>
+  </div>
+  </section>
+
+</main>
+<div class="modal" id="qrM"><div class="box glass center" style="max-width:420px;width:94%">
+  <h3>📷 Scan the QR on the classroom screen</h3>
+  <video id="qrVideo" playsinline muted style="width:100%;border-radius:14px;background:#000;max-height:60vh"></video><canvas id="qrCanvas" hidden></canvas>
+  <p class="muted" style="font-size:.85rem">Point the camera at the QR. Attendance is marked automatically.</p>
+  <div class="row-end" style="justify-content:center"><button class="btn ghost" id="qrClose">Cancel</button></div></div></div>
+<div class="modal" id="payM"><div class="box glass">
+  <h3>💳 Pay fee – <span id="payTitle"></span></h3>
+  {% if upi_id %}<div class="tip info" style="margin-bottom:12px">Pay to <b>{{ payee }}</b> · UPI ID <b class="mono">{{ upi_id }}</b>, then enter the transaction reference below.</div>
+  {% else %}<div class="tip info" style="margin-bottom:12px">Pay through the college's bank / UPI, then enter the transaction reference below. The accounts office confirms it.</div>{% endif %}
+  <div class="field"><label>Amount (₹) – balance <b id="payBal"></b></label><input class="inp" id="payAmt" type="number" step="0.01" min="1"></div>
+  <div class="field"><label>Method</label><select class="inp" id="payMethod">{% for m in fee_methods %}<option>{{ m }}</option>{% endfor %}</select></div>
+  <div class="field" id="payRefBox"><label>Transaction / reference number</label><input class="inp" id="payRef" maxlength="40" placeholder="e.g. 4083 2910 5521"></div>
+  <div class="row-end"><button class="btn ghost" data-close>Cancel</button>{% if gateway_on %}<button class="btn" id="payOnline">⚡ Pay online (auto-verified)</button>{% endif %}<button class="btn good" id="payGo">Submit payment</button></div>
+</div></div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+{% if gateway_on %}<script src="https://checkout.razorpay.com/v1/checkout.js"></script>{% endif %}
+<script>
+(async () => { try { const r = await api('/student/api/announcements?limit=3'); const box = $('#annBox');
+  box.innerHTML = r.rows.map(a => `<div style="padding:6px 0;border-top:1px solid rgba(255,255,255,.08)"><b>${a.pinned ? '📌 ' : '📢 '}${esc(a.title)}</b> <small class="muted">· ${esc(a.author_name)} · ${esc(a.created_at.slice(0, 10))}</small><div class="muted" style="white-space:pre-wrap">${esc(a.body.length > 220 ? a.body.slice(0, 220) + '…' : a.body)}</div></div>`).join(''); } catch (e) {} })();
+$('#payOnline')?.addEventListener('click', async () => {
+  const b = $('#payOnline'); busy(b, true);
+  try {
+    const o = await api('/student/api/fees/gateway/order', 'POST', { fee_id: payFee, amount: $('#payAmt').value });
+    closeModal('payM');
+    new Razorpay({ key: o.key_id, order_id: o.order_id, amount: o.amount, currency: 'INR', name: o.name, description: o.description, prefill: o.prefill,
+      handler: async resp => { try { const v = await api('/student/api/fees/gateway/verify', 'POST', resp); toast(v.message); setTimeout(() => location.reload(), 1200); } catch (e) { toast(e.message, 'err'); } },
+      modal: { ondismiss: () => busy(b, false) } }).open();
+  } catch (e) { toast(e.message, 'err'); }
+  busy(b, false);
+});
+</script>
+<script>
+const REP = {{ rep|tojson }};
+const ov = {{ (rep.overall if rep.overall is not none else 0)|tojson }};
+(() => {
+  const ring = $('#ring'), num = $('#ringNum'); countUp(num, ov, 1, '%');
+  const t0 = performance.now(); (function s(t) { const p = Math.min(1, (t - t0) / 1300); ring.style.setProperty('--v', ov * (1 - Math.pow(1 - p, 4))); if (p < 1) requestAnimationFrame(s); })(t0);
+  setTimeout(() => $$('.prog i').forEach(i => i.style.width = i.dataset.w + '%'), 250);
+  if (!window.Chart) return;
+  Chart.defaults.color = '#c7d6f5'; Chart.defaults.font.family = 'Inter';
+  const grid = { color: 'rgba(255,255,255,.08)' }, base = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, animation: { duration: 1300 } };
+  new Chart($('#cTrend'), { type: 'line', data: { labels: REP.trend.map(t => t.date.slice(5)), datasets: [{ data: REP.trend.map(t => t.pct), borderColor: '#22d3ee', backgroundColor: 'rgba(34,211,238,.18)', fill: true, tension: .4, pointRadius: 2 }] },
+    options: { ...base, scales: { y: { min: 0, max: 100, grid, title: { display: true, text: 'Cumulative attendance %' } }, x: { grid: { display: false } } } } });
+  const subs = REP.subjects.filter(s => s.marks_pct !== null);
+  new Chart($('#cMarks'), { type: 'bar', data: { labels: subs.map(s => s.code), datasets: [{ data: subs.map(s => s.marks_pct), backgroundColor: subs.map(s => s.marks_pct >= 60 ? '#22c55e' : s.marks_pct >= 40 ? '#f59e0b' : '#f43f5e'), borderRadius: 8 }] },
+    options: { ...base, scales: { y: { min: 0, max: 100, grid, title: { display: true, text: 'Marks %' } }, x: { grid: { display: false } } } } });
+})();
+
+/* ---- AI attendance: passive presence beacons + optional class-code fallback ---- */
+const DEV = (() => { try { let d = localStorage.getItem('sincet_dev'); if (!d) { d = (crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('')); localStorage.setItem('sincet_dev', d); } return d; } catch (e) { return ''; } })();
+let CI = null, sending = false, lastBeacon = 0;
+const mmss = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+const MSG = { verifying: ['info', 'AI is verifying your presence… keep this page open.'], review: ['warn', 'Sent to your faculty for confirmation. You can stay on this page.'], blocked: ['danger', 'Could not verify you on this phone. Use your own registered phone or ask your faculty.'], rejected: ['danger', 'Your faculty marked you absent for this class.'] };
+function paintCI() {
+  const open = (CI || []).filter(x => x.stage !== 'marked'), done = (CI || []).filter(x => x.stage === 'marked');
+  const st = open[0] ? open[0].stage : (done.length ? 'marked' : 'none');
+  $('#ciState').textContent = { verifying: 'Verifying', review: 'In review', blocked: 'Blocked', rejected: 'Absent', marked: 'Present', none: 'Idle' }[st];
+  $('#ciState').className = 'pill ' + ({ marked: 'good', verifying: 'info', review: 'warn', blocked: 'danger', rejected: 'danger', none: 'info' }[st]);
+  $('#ciNone').style.display = st === 'none' ? '' : 'none';
+  $('#ciLive').style.display = open.length ? '' : 'none';
+  $('#ciDone').style.display = !open.length && done.length ? '' : 'none';
+  if (open.length) { const s = open[0], m = MSG[s.stage]; $('#ciSub').textContent = s.subject; $('#ciEnds').textContent = mmss(s.ends_in);
+    $('#ciMsg').className = 'tip ' + m[0]; $('#ciMsg').textContent = m[1] + (s.stage === 'verifying' && s.hint ? ' (' + s.hint + ')' : ''); }
+  if (done.length) $('#ciDoneSub').textContent = done[0].subject;
+}
+function getPos() {
+  return new Promise(res => {
+    if (!navigator.geolocation) return res(null);
+    navigator.geolocation.getCurrentPosition(p => res(p.coords), () => res(null), { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+  });
+}
+async function beacon() {
+  if (sending || !(CI || []).some(x => ['verifying', 'review'].includes(x.stage))) return;
+  sending = true; lastBeacon = Date.now();
+  try {
+    const body = { device: DEV };
+    if (CI.length) { const c = await getPos(); if (c) { body.lat = c.latitude; body.lon = c.longitude; body.accuracy = c.accuracy; } }
+    const r = await api('/student/api/presence', 'POST', body);
+    r.sessions.forEach(x => { const m = CI.find(c => c.id === x.id); if (m) { m.stage = x.stage; m.hint = x.hint; m.marked = x.stage === 'marked'; } });
+    paintCI(); if (r.sessions.some(x => x.stage === 'marked')) { toast('Attendance marked by AI ✔'); setTimeout(() => location.reload(), 1500); }
+  } catch (e) { /* retry on the next beat */ } finally { sending = false; }
+}
+async function pollCI() { try { CI = (await api('/student/api/attendance/status')).sessions; paintCI(); if (Date.now() - lastBeacon > 15000) beacon(); } catch (e) { /* retry next tick */ } }
+setInterval(() => { (CI || []).forEach(x => x.ends_in = Math.max(0, x.ends_in - 1)); paintCI(); }, 1000);
+setInterval(pollCI, 5000); pollCI();
+$('#ciCode').addEventListener('input', e => e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6));
+$('#ciBtn').onclick = async () => {
+  const code = $('#ciCode').value.trim(); if (code.length !== 6) { toast('Enter the 6-digit code.', 'err'); return; }
+  const b = $('#ciBtn'); busy(b, true);
+  try {
+    const body = { code, device: DEV };
+    if ((CI || []).length) { const c = await getPos(); if (c) { body.lat = c.latitude; body.lon = c.longitude; body.accuracy = c.accuracy; } }
+    const r = await api('/student/api/attendance/mark', 'POST', body);
+    toast(r.message); $('#ciCode').value = ''; setTimeout(() => location.reload(), 1200);
+  } catch (e) { toast(e.message, 'err'); } finally { busy(b, false); }
+};
+/* ---- QR scan (camera) ---- */
+let qrStream = null, qrBusy = false;
+async function markWithCode(code) {
+  const body = { code, device: DEV };
+  if ((CI || []).length) { const c = await getPos(); if (c) { body.lat = c.latitude; body.lon = c.longitude; body.accuracy = c.accuracy; } }
+  return api('/student/api/attendance/mark', 'POST', body);
+}
+function qrStop() { qrStream?.getTracks().forEach(t => t.stop()); qrStream = null; closeModal('qrM'); }
+function qrCode(text) { try { const u = new URL(text); const c = u.searchParams.get('c'); return /^\d{6}$/.test(c || '') ? c : null; } catch (e) { return /^\d{6}$/.test(text) ? text : null; } }
+async function qrLoop(video, canvas) {
+  const det = window.BarcodeDetector ? new BarcodeDetector({ formats: ['qr_code'] }) : null, ctx = canvas.getContext('2d', { willReadFrequently: true });
+  while (qrStream) {
+    await new Promise(r => setTimeout(r, 250));
+    if (qrBusy || video.readyState < 2) continue;
+    let text = null;
+    try {
+      if (det) { const f = await det.detect(video); text = f[0]?.rawValue || null; }
+      else if (window.jsQR) { canvas.width = video.videoWidth; canvas.height = video.videoHeight; ctx.drawImage(video, 0, 0); const d = ctx.getImageData(0, 0, canvas.width, canvas.height); text = jsQR(d.data, d.width, d.height)?.data || null; }
+    } catch (e) {}
+    const code = text && qrCode(text); if (!code) continue;
+    qrBusy = true;
+    try { const r = await markWithCode(code); qrStop(); toast(r.message); setTimeout(() => location.reload(), 1200); }
+    catch (e) { toast(e.message, 'err'); setTimeout(() => qrBusy = false, 2500); }
+  }
+}
+$('#qrOpen').onclick = async () => {
+  if (!navigator.mediaDevices?.getUserMedia) return toast('Camera is not available here (needs HTTPS). Use the code instead.', 'err');
+  try {
+    qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const v = $('#qrVideo'); v.srcObject = qrStream; await v.play(); qrBusy = false; openModal('qrM'); qrLoop(v, $('#qrCanvas'));
+  } catch (e) { toast('Allow camera access to scan the QR.', 'err'); }
+};
+$('#qrClose').onclick = qrStop;
+/* ---- Fees: pay ---- */
+let payFee = null;
+$$('[data-pay]').forEach(b => b.onclick = () => { payFee = b.dataset.pay; $('#payTitle').textContent = b.dataset.title; $('#payBal').textContent = '₹' + b.dataset.bal; $('#payAmt').value = b.dataset.bal; $('#payAmt').max = b.dataset.bal; $('#payRef').value = ''; openModal('payM'); });
+$('#payMethod').onchange = e => $('#payRefBox').style.display = e.target.value === 'Cash at office' ? 'none' : '';
+$('#payGo').onclick = async () => {
+  const b = $('#payGo'); busy(b, true);
+  try {
+    const r = await api('/student/api/fees/pay', 'POST', { fee_id: payFee, amount: $('#payAmt').value, method: $('#payMethod').value, reference: $('#payRef').value });
+    closeModal('payM'); toast(r.message); setTimeout(() => location.reload(), 1200);
+  } catch (e) { toast(e.message, 'err'); } finally { busy(b, false); }
+};
+</script>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "faculty/_shell.html" %}
+{% block title %}Announcements – SINCET{% endblock %}
+{% block heading %}📢 Announcements{% endblock %}
+{% block content %}
+<div class="grid g2">
+<div class="card glass rise d1"><h3>Post to my students ({{ me.dept_name }})</h3>
+  <div class="field"><label>Title</label><input class="inp" id="title" maxlength="150"></div>
+  <div class="field"><label>Message</label><textarea class="inp" id="body" rows="4" maxlength="2000"></textarea></div>
+  <div class="grid g2" style="gap:12px"><div class="field"><label>Year</label><select class="inp" id="year"><option value="">All years</option>{% for i in range(1,5) %}<option value="{{ i }}">Year {{ i }}</option>{% endfor %}</select></div>
+    <div class="field"><label>Expires on (optional)</label><input class="inp" type="date" id="exp"></div></div>
+  <button class="btn" id="go">Publish</button>
+  <h3 style="margin-top:22px;font-size:1rem">My announcements</h3>
+  {% for a in mine %}<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.08)"><b>{{ a.title }}</b> <small class="muted">· {{ a.created_at[:10] }}{% if a.year_no %} · Year {{ a.year_no }}{% endif %}</small>
+    <button class="btn danger sm" style="float:right" data-del="{{ a.id }}">✖</button></div>{% else %}<p class="muted">None yet.</p>{% endfor %}</div>
+<div class="card glass rise d2"><h3>From the college</h3>
+  {% for a in rows if a.author_role == 'admin' %}<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.08)"><b>{% if a.pinned %}📌 {% endif %}{{ a.title }}</b><br><small class="muted">{{ a.created_at[:16] }}</small><p style="white-space:pre-wrap;margin:6px 0 0">{{ a.body }}</p></div>{% else %}<p class="muted">No notices.</p>{% endfor %}</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+$('#go').onclick = async e => { busy(e.target, true);
+  try { await api('/faculty/api/announcements', 'POST', { title: $('#title').value, body: $('#body').value, year: $('#year').value, expires_on: $('#exp').value }); toast('Published ✔'); setTimeout(() => location.reload(), 600);
+  } catch (err) { toast(err.message, 'err'); busy(e.target, false); } };
+document.addEventListener('click', async e => { const d = e.target.closest('[data-del]'); if (!d || !confirm('Delete this announcement?')) return;
+  try { await api(`/faculty/api/announcements/${d.dataset.del}`, 'DELETE'); location.reload(); } catch (err) { toast(err.message, 'err'); } });
+</script>
+{% endblock %}

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block body %}
+<main class="main" style="max-width:1100px;margin:auto">
+  <header class="top">
+    <div class="brand"><div class="logo"><img src="{{ url_for('static', filename='img/logo.png') }}" alt=""></div>
+      <div><b>{% block heading %}{% endblock %}</b><small>{{ me.dept_name }}{% if me.year_no %} · Year {{ me.year_no }}{% endif %}{% if me.section_name %} · Sec {{ me.section_name }}{% endif %}</small></div></div>
+    <div class="who"><a class="btn ghost sm" href="{{ url_for('student_dashboard') }}">← Dashboard</a><a class="btn ghost sm" href="{{ logout_url() }}">Logout</a></div>
+  </header>
+  {% block content %}{% endblock %}
+</main>
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "student/_shell.html" %}
+{% block title %}Assignments – SINCET{% endblock %}
+{% block heading %}📝 Assignment submission{% endblock %}
+{% block content %}
+<div class="card glass rise d1">
+  <p class="muted" style="margin-top:0">Upload your work before the due date. You can replace a file until the faculty grades it. Allowed: {{ exts|join(', ') }} · max {{ max_mb }} MB.</p>
+  <div class="tw"><table><thead><tr><th>Assignment</th><th>Subject</th><th>Due</th><th>Status</th><th>Marks</th><th>Upload</th></tr></thead><tbody>
+  {% for t in tasks %}
+  <tr><td><b>{{ t.title }}</b>{% if t.description %}<br><small class="muted" style="white-space:normal">{{ t.description }}</small>{% endif %}</td>
+    <td>{{ t.subject_code }}</td>
+    <td>{{ t.due_date or '–' }}{% if t.overdue and not t.sub_id %} <span class="pill danger">overdue</span>{% endif %}</td>
+    <td>{% if t.sub_id %}<span class="pill {{ 'good' if t.marks is not none else 'info' }}">{{ 'Graded' if t.marks is not none else 'Submitted' }}</span>{% if t.is_late %} <span class="pill warn">late</span>{% endif %}
+        <br><a href="{{ url_for('feat.student_submission_file', sid=t.sub_id) }}"><small>{{ t.file_name }}</small></a>
+        {% else %}<span class="pill warn">Not submitted</span>{% endif %}</td>
+    <td>{% if t.marks is not none %}{{ t.marks|round(1) }} / {{ t.max_marks|round(0)|int }}{% if t.feedback %}<br><small class="muted" style="white-space:normal">{{ t.feedback }}</small>{% endif %}{% else %}–{% endif %}</td>
+    <td>{% if t.marks is none %}<input type="file" data-file="{{ t.id }}" style="max-width:190px"> <button class="btn sm" data-up="{{ t.id }}">Upload</button>{% else %}—{% endif %}</td></tr>
+  {% else %}<tr><td colspan="6" class="empty">No assignments have been posted for your class yet.</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-up]'); if (!b) return;
+  const id = b.dataset.up, inp = $(`[data-file="${id}"]`), f = inp.files[0];
+  if (!f) return toast('Choose a file first', 'err');
+  const fd = new FormData(); fd.append('file', f);
+  busy(b, true);
+  try {
+    const res = await fetch(`/student/api/assignments/${id}/submit`, { method: 'POST', headers: { 'X-CSRF-Token': CSRF, 'X-Requested-With': 'fetch' }, body: fd });
+    const d = await res.json(); if (!res.ok || d.ok === false) throw new Error(d.error || 'Upload failed');
+    toast(d.message); setTimeout(() => location.reload(), 700);
+  } catch (err) { toast(err.message, 'err'); busy(b, false); }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "admin/layout.html" %}
+{% block title %}Admin roles – SINCET{% endblock %}
+{% block heading %}🛡️ Role-wise admin accounts{% endblock %}
+{% block content %}
+<div class="grid g2">
+<div class="card glass rise d1"><h3>Create admin account</h3>
+  <div class="field"><label>Username</label><input class="inp" id="un" maxlength="40" placeholder="accounts1"></div>
+  <div class="field"><label>Full name</label><input class="inp" id="nm" maxlength="100"></div>
+  <div class="field"><label>Role</label><select class="inp" id="sc">{% for k, v in scopes.items() %}<option value="{{ k }}" {{ 'selected' if k == 'accounts' }}>{{ v }}</option>{% endfor %}</select></div>
+  <button class="btn" id="go">Create</button>
+  <p class="muted"><small>A one-time password is shown once; the new admin must change it at first sign-in. Login URL is the same secret admin URL.</small></p></div>
+<div class="card glass rise d2"><h3>Admin accounts</h3><div class="tw"><table><thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Last login</th><th></th></tr></thead><tbody id="body2"></tbody></table></div></div>
+</div>
+<div class="modal" id="pwM"><div class="box glass center"><h3>One-time password</h3><p>Username <b class="mono" id="pwU"></b></p><p class="pass" id="pwP" style="font-size:1.2rem"></p><p class="muted">Copy it now – it is not stored anywhere.</p>
+  <div class="row-end" style="justify-content:center"><button class="btn ghost" id="pwC">Copy</button><button class="btn" data-close>Done</button></div></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+let S = {};
+function showPw(u, p) { $('#pwU').textContent = u; $('#pwP').textContent = p; openModal('pwM'); }
+async function load() { const r = await api('/admin/api/staff'); S = r.scopes;
+  $('#body2').innerHTML = r.rows.map(a => `<tr><td class="mono">${esc(a.username)}</td><td>${esc(a.full_name)}</td><td><select class="inp" data-sc="${a.id}" style="padding:6px">${Object.entries(S).map(([k, v]) => `<option value="${k}" ${k === a.scope ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select></td><td>${esc(a.last_login || 'never')}</td>` +
+    `<td><div class="acts"><button class="btn ghost sm" data-rs="${a.id}" data-u="${esc(a.username)}">Reset password</button><button class="btn danger sm" data-del="${a.id}">✖</button></div></td></tr>`).join(''); }
+load().catch(e => toast(e.message, 'err'));
+$('#go').onclick = async e => { busy(e.target, true); try { const r = await api('/admin/api/staff', 'POST', { username: $('#un').value, name: $('#nm').value, scope: $('#sc').value }); showPw(r.username, r.password); $('#un').value = $('#nm').value = ''; load(); } catch (err) { toast(err.message, 'err'); } busy(e.target, false); };
+$('#pwC').onclick = () => copyText($('#pwP').textContent);
+document.addEventListener('change', async e => { const s = e.target.closest('[data-sc]'); if (!s) return; try { await api(`/admin/api/staff/${s.dataset.sc}/scope`, 'POST', { scope: s.value }); toast('Role updated'); } catch (err) { toast(err.message, 'err'); load(); } });
+document.addEventListener('click', async e => { const r = e.target.closest('[data-rs]'), d = e.target.closest('[data-del]');
+  try { if (r && confirm('Reset this admin\'s password?')) { const x = await api(`/admin/api/staff/${r.dataset.rs}/reset`, 'POST', {}); showPw(r.dataset.u, x.password); }
+    if (d && confirm('Delete this admin account?')) { await api(`/admin/api/staff/${d.dataset.del}`, 'DELETE'); load(); } } catch (err) { toast(err.message, 'err'); } });
+</script>
+{% endblock %}

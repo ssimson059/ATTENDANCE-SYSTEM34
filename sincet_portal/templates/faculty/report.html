@@ -1,0 +1,31 @@
+{% extends "faculty/_shell.html" %}
+{% block title %}Low attendance – SINCET{% endblock %}
+{% block heading %}⚠️ Low attendance list{% endblock %}
+{% block content %}
+<div class="card glass rise d1">
+  <div class="bar"><select class="inp" id="year"><option value="">All years</option>{% for i in range(1,5) %}<option value="{{ i }}">Year {{ i }}</option>{% endfor %}</select>
+    <select class="inp" id="section"><option value="">All sections</option>{% for s in sections %}<option value="{{ s.id }}">Y{{ s.year_no }} – {{ s.name }}</option>{% endfor %}</select>
+    <input class="inp" id="thr" type="number" min="1" max="100" value="{{ default_threshold|int }}" title="Attendance below (%)" style="max-width:120px">
+    <button class="btn" id="go">Show</button>
+    <a class="btn ghost sm" id="xl">Excel</a><a class="btn ghost sm" id="pf">PDF</a><a class="btn ghost sm" id="cs">CSV</a></div>
+  <div class="tw"><table><thead id="head"></thead><tbody id="body"></tbody></table></div>
+  <div class="bar" style="margin-top:14px"><select class="inp" id="ch" style="max-width:160px"><option value="sms">SMS</option><option value="whatsapp">WhatsApp</option><option value="email">Email</option></select>
+    <button class="btn danger" id="alert">📲 Alert parents of these students</button><span class="muted" id="msg"></span></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const qs = () => new URLSearchParams({ year: $('#year').value, section: $('#section').value, threshold: $('#thr').value }).toString();
+async function load() { const r = await api('/faculty/api/reports/low-attendance?' + qs());
+  $('#head').innerHTML = '<tr>' + r.header.map(h => `<th>${esc(h)}</th>`).join('') + '</tr>';
+  $('#body').innerHTML = r.rows.length ? r.rows.map(x => '<tr>' + x.map(c => `<td>${esc(c)}</td>`).join('') + '</tr>').join('') : `<tr><td colspan="8" class="empty">No student is below ${$('#thr').value}%.</td></tr>`;
+  ['xl', 'pf', 'cs'].forEach((id, i) => $('#' + id).href = `/faculty/reports/low-attendance.${['xlsx', 'pdf', 'csv'][i]}?` + qs()); }
+$('#go').onclick = () => load().catch(e => toast(e.message, 'err')); load().catch(e => toast(e.message, 'err'));
+$('#alert').onclick = async () => { const body = { year: $('#year').value, section: $('#section').value, threshold: $('#thr').value, channel: $('#ch').value };
+  try { const p = await api('/faculty/api/reports/alert-parents', 'POST', { ...body, preview: true });
+    if (!p.students) return toast('No students to alert', 'err');
+    if (!confirm(`Send ${$('#ch').value.toUpperCase()} to parents of ${p.with_contact} of ${p.students} students (others have no parent contact)?` + (p.configured ? '' : '\n\nNote: this channel is not configured yet - messages will only be logged (dry run).'))) return;
+    const r = await api('/faculty/api/reports/alert-parents', 'POST', body);
+    $('#msg').textContent = `sent ${r.sent}, logged ${r.logged}, failed ${r.failed}, already alerted this week ${r.duplicate}, no contact ${r.no_contact}`; toast('Done'); } catch (e) { toast(e.message, 'err'); } };
+</script>
+{% endblock %}

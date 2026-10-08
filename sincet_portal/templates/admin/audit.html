@@ -1,0 +1,26 @@
+{% extends "admin/layout.html" %}
+{% block title %}Audit log – SINCET{% endblock %}
+{% block heading %}🧾 Audit log{% endblock %}
+{% block content %}
+<div class="card glass rise d1">
+  <div class="bar"><input class="inp" id="q" placeholder="🔍 Search actor / action / detail" style="flex:2"><input class="inp" id="actor" placeholder="Exact actor" style="max-width:160px">
+    <select class="inp" id="action" style="max-width:220px"><option value="">All actions</option>{% for a in actions %}<option>{{ a }}</option>{% endfor %}</select>
+    <input class="inp" type="date" id="from" title="From" style="max-width:160px"><input class="inp" type="date" id="to" title="To" style="max-width:160px">
+    <button class="btn" id="go">Search</button><a class="btn ghost sm" id="csv">⬇ CSV</a></div>
+  <div class="tw"><table><thead><tr><th>#</th><th>Time</th><th>Actor</th><th>Action</th><th>Detail</th></tr></thead><tbody id="body2"></tbody></table></div>
+  <div class="bar" style="margin-top:12px;justify-content:space-between"><span class="muted" id="count"></span><div class="acts"><button class="btn ghost sm" id="prev">‹ Prev</button><span id="pg" class="muted" style="align-self:center"></span><button class="btn ghost sm" id="next">Next ›</button></div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let page = 1, pages = 1;
+const qs = () => new URLSearchParams({ q: $('#q').value.trim(), actor: $('#actor').value.trim(), action: $('#action').value, from: $('#from').value, to: $('#to').value });
+async function load() { const p = qs(); p.set('page', page); const r = await api('/admin/api/audit?' + p); pages = r.pages;
+  $('#body2').innerHTML = r.rows.length ? r.rows.map(x => `<tr><td>${x.id}</td><td>${esc(x.created_at)}</td><td class="mono">${esc(x.actor)}</td><td><span class="pill info">${esc(x.action)}</span></td><td style="white-space:normal;max-width:480px">${esc(x.detail || '')}</td></tr>`).join('') : '<tr><td colspan="5" class="empty">No matching entries.</td></tr>';
+  $('#count').textContent = r.total.toLocaleString('en-IN') + ' entries'; $('#pg').textContent = `Page ${r.page} / ${r.pages}`; $('#csv').href = '/admin/audit/export.csv?' + qs(); }
+$('#go').onclick = () => { page = 1; load().catch(e => toast(e.message, 'err')); };
+$('#prev').onclick = () => { if (page > 1) { page--; load(); } }; $('#next').onclick = () => { if (page < pages) { page++; load(); } };
+$('#q').onkeydown = e => { if (e.key === 'Enter') $('#go').click(); };
+load().catch(e => toast(e.message, 'err'));
+</script>
+{% endblock %}

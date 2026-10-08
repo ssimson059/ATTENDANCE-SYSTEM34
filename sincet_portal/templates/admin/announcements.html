@@ -1,0 +1,26 @@
+{% extends "admin/layout.html" %}
+{% block title %}Announcements – SINCET{% endblock %}
+{% block heading %}📢 Announcements{% endblock %}
+{% block content %}
+<div class="grid g2">
+<div class="card glass rise d1"><h3>New announcement</h3>
+  <div class="field"><label>Title</label><input class="inp" id="title" maxlength="150"></div>
+  <div class="field"><label>Message</label><textarea class="inp" id="body" rows="4" maxlength="2000"></textarea></div>
+  <div class="grid g2" style="gap:12px"><div class="field"><label>Audience</label><select class="inp" id="aud"><option value="all">Students &amp; faculty</option><option value="student">Students only</option><option value="faculty">Faculty only</option></select></div>
+    <div class="field"><label>Department</label><select class="inp" id="dept"><option value="">All departments</option>{% for d in depts %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select></div>
+    <div class="field"><label>Year</label><select class="inp" id="year"><option value="">All years</option>{% for i in range(1,5) %}<option value="{{ i }}">Year {{ i }}</option>{% endfor %}</select></div>
+    <div class="field"><label>Expires on (optional)</label><input class="inp" type="date" id="exp"></div></div>
+  <label style="text-transform:none"><input type="checkbox" id="pin"> 📌 Pin to top</label><div class="row-end"><button class="btn" id="go">Publish</button></div></div>
+<div class="card glass rise d2"><h3>Published</h3><div class="tw" style="max-height:60vh"><table><thead><tr><th>Date</th><th>Title</th><th>For</th><th>By</th><th></th></tr></thead><tbody id="body2"></tbody></table></div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function load() { const r = await api('/admin/api/announcements');
+  $('#body2').innerHTML = r.rows.length ? r.rows.map(a => `<tr><td>${esc(a.created_at.slice(0, 10))}</td><td>${a.pinned ? '📌 ' : ''}${esc(a.title)}</td><td>${esc(a.audience)}${a.dept ? ' · ' + esc(a.dept) : ''}${a.year_no ? ' · Y' + a.year_no : ''}</td><td>${esc(a.author_name)}</td><td><button class="btn danger sm" data-del="${a.id}">✖</button></td></tr>`).join('') : '<tr><td colspan="5" class="empty">Nothing yet.</td></tr>'; }
+load().catch(e => toast(e.message, 'err'));
+$('#go').onclick = async e => { busy(e.target, true); try { await api('/admin/api/announcements', 'POST', { title: $('#title').value, body: $('#body').value, audience: $('#aud').value, dept: $('#dept').value, year: $('#year').value, expires_on: $('#exp').value, pinned: $('#pin').checked });
+  toast('Published ✔ – visible on dashboards now'); $('#title').value = $('#body').value = ''; load(); } catch (err) { toast(err.message, 'err'); } busy(e.target, false); };
+document.addEventListener('click', async e => { const b = e.target.closest('[data-del]'); if (!b || !confirm('Delete this announcement?')) return; try { await api('/admin/api/announcements/' + b.dataset.del, 'DELETE'); load(); } catch (err) { toast(err.message, 'err'); } });
+</script>
+{% endblock %}

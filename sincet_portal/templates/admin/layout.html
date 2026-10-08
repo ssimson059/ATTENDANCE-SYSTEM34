@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block bodyclass %}admin{% endblock %}
+{% block body %}
+<div class="shell">
+  <aside class="side glass">
+    <div class="brand"><div class="logo"><img src="{{ url_for('static', filename='img/logo.png') }}" alt=""></div>
+      <div><b>SINCET Admin</b><small>Smart Attendance System</small></div></div>
+    <nav class="nav">
+      <div class="sec">Overview</div>
+      <a href="{{ url_for('admin_dashboard') }}" class="{{ 'on' if active=='dashboard' }}">📊 Dashboard</a>
+      {% if admin_scope == 'super' %}
+      <div class="sec">Accounts</div>
+      <a href="{{ url_for('admin_generate') }}" class="{{ 'on' if active=='generate' }}">⚡ Generate Accounts</a>
+      <a href="{{ url_for('admin_users') }}" class="{{ 'on' if active=='users' }}">👥 Manage Users</a>
+      <a href="{{ url_for('admin_history') }}" class="{{ 'on' if active=='history' }}">🕘 Generation History</a>
+      <div class="sec">Academics</div>
+      <a href="{{ url_for('admin_entity', ent='departments') }}" class="{{ 'on' if active=='departments' }}">🏛️ Departments</a>
+      <a href="{{ url_for('admin_entity', ent='sections') }}" class="{{ 'on' if active=='sections' }}">🧩 Sections</a>
+      <a href="{{ url_for('admin_entity', ent='subjects') }}" class="{{ 'on' if active=='subjects' }}">📚 Subjects</a>
+      {% endif %}
+      {% if can('marks') %}
+      <div class="sec">Records</div>
+      {% if admin_scope == 'super' %}<a href="{{ url_for('admin_entity', ent='attendance') }}" class="{{ 'on' if active=='attendance' }}">🗓️ Attendance</a>{% endif %}
+      <a href="{{ url_for('admin_entity', ent='marks') }}" class="{{ 'on' if active=='marks' }}">📈 Performance</a>
+      <a href="{{ url_for('admin_entity', ent='assignments') }}" class="{{ 'on' if active=='assignments' }}">📝 Assignments</a>
+      <a href="{{ url_for('feat.admin_schedule_page') }}" class="{{ 'on' if active=='schedule' }}">🕒 Timetable &amp; Exams</a>
+      <a href="{{ url_for('feat.admin_results_page') }}" class="{{ 'on' if active=='results' }}">🎓 Results &amp; Mark sheets</a>
+      {% endif %}
+      {% if can('library') or can('feedback') %}
+      <div class="sec">Campus</div>
+      {% if can('library') %}<a href="{{ url_for('feat.admin_library_page') }}" class="{{ 'on' if active=='library' }}">📖 Library</a>{% endif %}
+      {% if can('feedback') %}<a href="{{ url_for('feat.admin_feedback_page') }}" class="{{ 'on' if active=='feedback' }}">⭐ Faculty Feedback</a>{% endif %}
+      {% endif %}
+      {% if can('fees') %}
+      <div class="sec">Finance</div>
+      <a href="{{ url_for('admin_fees') }}" class="{{ 'on' if active=='fees' }}">💳 Fees &amp; Payments</a>
+      <a href="{{ url_for('feat.admin_notifications_page') }}" class="{{ 'on' if active=='notify' }}">🔔 Reminders &amp; Contacts</a>
+      {% endif %}
+      <div class="sec">Reports &amp; Notices</div>
+      <a href="{{ url_for('feat.admin_reports_page') }}" class="{{ 'on' if active=='reports' }}">📊 Reports &amp; Export</a>
+      <a href="{{ url_for('feat.admin_announcements_page') }}" class="{{ 'on' if active=='announce' }}">📢 Announcements</a>
+      {% if admin_scope == 'super' %}
+      <div class="sec">Security</div>
+      <a href="{{ url_for('feat.admin_staff_page') }}" class="{{ 'on' if active=='staff' }}">🛡️ Admin Roles</a>
+      <a href="{{ url_for('feat.admin_audit_page') }}" class="{{ 'on' if active=='audit' }}">🧾 Audit Log</a>
+      {% endif %}
+      <div class="sec">Account</div>
+      <a href="{{ password_url() }}">🔑 Change Password</a>
+      <a href="{{ logout_url() }}">🚪 Logout</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header class="top">
+      <div style="display:flex;gap:12px;align-items:center">
+        <button class="btn ghost sm menu-btn" aria-label="Menu">☰</button>
+        <h2>{% block heading %}{% endblock %}</h2>
+      </div>
+      <div class="who"><div style="text-align:right"><b>{{ cur.name }}</b><br><small class="muted">{{ cur.username }} · {{ {'super':'Administrator','accounts':'Accounts office','exam':'Exam cell','library':'Librarian'}[admin_scope] }}</small></div>
+        <div class="avatar">{{ (cur.name or 'A')[0] }}</div></div>
+    </header>
+    <div class="page">{% block content %}{% endblock %}</div>
+  </main>
+</div>
+{% endblock %}

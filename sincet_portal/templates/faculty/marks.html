@@ -1,0 +1,60 @@
+{% extends "faculty/_shell.html" %}
+{% block title %}Bulk marks entry – SINCET{% endblock %}
+{% block heading %}📈 Bulk marks entry{% endblock %}
+{% block content %}
+<div class="card glass rise d1"><h3>1 · Select class &amp; exam</h3>
+  <div class="bar">
+    <select class="inp" id="dept">{% for d in depts %}{% if any_dept or d.id == me.department_id %}<option value="{{ d.id }}" {{ 'selected' if d.id == me.department_id }}>{{ d.name }}</option>{% endif %}{% endfor %}</select>
+    <select class="inp" id="year">{% for i in range(1,5) %}<option value="{{ i }}">Year {{ i }}</option>{% endfor %}</select>
+    <select class="inp" id="section"><option value="">Section…</option></select>
+    <select class="inp" id="subject" style="flex:2"><option value="">Subject…</option></select>
+  </div>
+  <div class="bar">
+    <select class="inp" id="kind"><option value="marks">Exam marks</option><option value="assignment">Assignment marks</option></select>
+    <select class="inp" id="exam">{% for e in exams %}<option>{{ e }}</option>{% endfor %}</select>
+    <input class="inp" id="aname" placeholder="Assignment name" maxlength="120" style="display:none;flex:2">
+    <input class="inp" id="max" type="number" min="1" max="1000" value="100" title="Maximum marks" style="max-width:130px">
+    <button class="btn" id="load">Load grid</button>
+  </div>
+</div>
+<div class="card glass rise d2" style="margin-top:18px"><h3>2 · Enter marks <small class="muted" id="info"></small></h3>
+  <div class="tw" style="max-height:60vh"><table><thead><tr><th>#</th><th>Student ID</th><th>Name</th><th style="width:150px">Marks</th></tr></thead>
+  <tbody id="body"><tr><td colspan="4" class="empty">Load a class to start.</td></tr></tbody></table></div>
+  <div class="row-end"><span class="muted" id="filled" style="align-self:center"></span><button class="btn good" id="save" disabled>💾 Save all</button></div>
+  <p class="muted"><small>Tip: type a mark and press <b>Enter</b> or ↓ to jump to the next student. Blank rows are left unchanged.</small></p>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const sel = id => $('#' + id);
+async function loadOptions() {
+  sel('section').innerHTML = '<option value="">Section…</option>'; sel('subject').innerHTML = '<option value="">Subject…</option>';
+  try { const r = await api(`/faculty/api/options?dept=${sel('dept').value}&year=${sel('year').value}`);
+    sel('section').innerHTML += r.sections.map(s => `<option value="${s.id}">Section ${esc(s.name)}</option>`).join('');
+    sel('subject').innerHTML += r.subjects.map(s => `<option value="${s.id}">${esc(s.code)} – ${esc(s.name)}</option>`).join('');
+  } catch (e) { toast(e.message, 'err'); } }
+['dept', 'year'].forEach(i => sel(i).onchange = loadOptions); loadOptions();
+sel('kind').onchange = () => { const a = sel('kind').value === 'assignment'; sel('exam').style.display = a ? 'none' : ''; sel('aname').style.display = a ? '' : 'none'; };
+const label = () => sel('kind').value === 'marks' ? sel('exam').value : sel('aname').value.trim();
+const cls = () => ({ dept: sel('dept').value, year: sel('year').value, section: sel('section').value, subject: sel('subject').value });
+function count() { const f = $$('.mk').filter(i => i.value !== '').length; sel('filled').textContent = `${f} of ${$$('.mk').length} filled`; }
+sel('load').onclick = async () => {
+  const c = cls(); if (!c.section || !c.subject) return toast('Select section and subject', 'err');
+  if (!label()) return toast('Enter the exam / assignment name', 'err');
+  try { const r = await api('/faculty/api/marks/grid?' + new URLSearchParams({ ...c, kind: sel('kind').value, label: label() }));
+    sel('max').value = r.max_marks; sel('info').textContent = '· ' + r.subject;
+    sel('body').innerHTML = r.students.length ? r.students.map((s, i) => `<tr><td>${i + 1}</td><td class="mono">${esc(s.username)}</td><td>${esc(s.name)}</td>` +
+      `<td><input class="inp mk" type="number" step="0.01" min="0" data-id="${s.id}" value="${s.marks ?? ''}" style="padding:7px 10px"></td></tr>`).join('') : '<tr><td colspan="4" class="empty">No active students in this class.</td></tr>';
+    sel('save').disabled = !r.students.length; count();
+  } catch (e) { toast(e.message, 'err'); } };
+sel('body').addEventListener('input', e => { const m = +sel('max').value; if (e.target.classList.contains('mk')) { e.target.style.borderColor = (e.target.value !== '' && (+e.target.value > m || +e.target.value < 0)) ? '#e11d48' : ''; count(); } });
+sel('body').addEventListener('keydown', e => { if (!e.target.classList.contains('mk') || !['Enter', 'ArrowDown', 'ArrowUp'].includes(e.key)) return; e.preventDefault();
+  const all = $$('.mk'), i = all.indexOf(e.target), n = all[e.key === 'ArrowUp' ? i - 1 : i + 1]; if (n) { n.focus(); n.select(); } });
+sel('save').onclick = async e => { const b = e.currentTarget, max = +sel('max').value;
+  const bad = $$('.mk').find(i => i.value !== '' && (+i.value > max || +i.value < 0)); if (bad) { bad.focus(); return toast(`Marks must be between 0 and ${max}`, 'err'); }
+  busy(b, true);
+  try { const r = await api('/faculty/api/marks/save', 'POST', { ...cls(), kind: sel('kind').value, label: label(), max_marks: max, entries: $$('.mk').map(i => ({ student_id: i.dataset.id, marks: i.value })) });
+    toast(`Saved marks for ${r.saved} students ✔`);
+  } catch (err) { toast(err.message, 'err'); } busy(b, false); };
+</script>
+{% endblock %}

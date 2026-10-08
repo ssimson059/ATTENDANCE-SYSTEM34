@@ -1,0 +1,27 @@
+{% extends "student/_shell.html" %}
+{% block title %}Study materials – SINCET{% endblock %}
+{% block heading %}📚 Study materials{% endblock %}
+{% block content %}
+<div class="card glass rise d1">
+  <div class="bar"><select class="inp" id="subj" style="max-width:340px"><option value="">All subjects</option>
+    {% for id, code, name in subjects %}<option value="{{ id }}" {{ 'selected' if sel == id }}>{{ code }} – {{ name }}</option>{% endfor %}</select>
+    <input class="inp" id="q" placeholder="🔍 Search title / faculty" style="flex:2"></div>
+  <div class="tw"><table><thead><tr><th>Material</th><th>Subject</th><th>Faculty</th><th>Uploaded</th><th>Size</th><th></th></tr></thead><tbody id="rows">
+  {% for m in rows %}
+  <tr data-s="{{ m.subject_id }}" data-t="{{ (m.title ~ ' ' ~ m.faculty ~ ' ' ~ m.subject_name)|lower }}">
+    <td><span class="pill info">{{ m.ext }}</span> <b>{{ m.title }}</b>{% if m.unit_no %} <span class="pill warn">Unit {{ m.unit_no }}</span>{% endif %}
+      {% if m.description %}<br><small class="muted" style="white-space:normal">{{ m.description }}</small>{% endif %}</td>
+    <td>{{ m.subject_code }}<br><small class="muted">{{ m.subject_name }}</small></td><td>{{ m.faculty }}</td>
+    <td>{{ m.created_at[:10] }}</td><td>{{ m.size }}</td>
+    <td><a class="btn sm" href="{{ url_for('feat.student_material_file', mid=m.id) }}">⬇ Download</a></td></tr>
+  {% else %}<tr><td colspan="6" class="empty">Your faculty have not uploaded any material for your class yet.</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function filt() { const s = $('#subj').value, q = $('#q').value.trim().toLowerCase();
+  $$('#rows tr[data-s]').forEach(r => r.style.display = (!s || r.dataset.s === s) && (!q || r.dataset.t.includes(q)) ? '' : 'none'); }
+$('#subj').onchange = $('#q').oninput = filt; filt();
+</script>
+{% endblock %}

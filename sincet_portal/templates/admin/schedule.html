@@ -1,0 +1,40 @@
+{% extends "admin/layout.html" %}
+{% block title %}Timetable & Exams – SINCET{% endblock %}
+{% block heading %}🕒 Timetable &amp; exam schedule{% endblock %}
+{% block content %}
+<div class="card glass rise d1"><h3>Class timetable</h3>
+  <div class="bar"><select class="inp" id="tsec" style="max-width:300px"><option value="">Select section…</option></select><button class="btn" id="tsave" disabled>💾 Save timetable</button></div>
+  <div class="tw" style="max-height:none"><table><thead id="thead"></thead><tbody id="tbody"><tr><td class="empty">Select a section.</td></tr></tbody></table></div>
+  <p class="muted"><small>Pick a subject, or leave it empty and type a label (Library, Lunch…). Room is optional. Period timings are set in <code>PERIOD_TIMES</code> in features.py.</small></p></div>
+<div class="card glass rise d2" style="margin-top:18px"><h3>Exam schedule</h3>
+  <div class="bar"><select class="inp" id="edept"><option value="">Department…</option></select><select class="inp" id="eyear"><option value="">Year…</option>{% for i in range(1,5) %}<option value="{{ i }}">Year {{ i }}</option>{% endfor %}</select>
+    <select class="inp" id="esub" style="flex:2"><option value="">Subject…</option></select><select class="inp" id="etype">{% for e in exams %}<option>{{ e }}</option>{% endfor %}</select>
+    <input class="inp" type="date" id="edate"><select class="inp" id="eses">{% for s in sessions %}<option>{{ s }}</option>{% endfor %}</select><input class="inp" id="evenue" placeholder="Hall / venue" maxlength="60"><button class="btn" id="eadd">＋ Add / update</button></div>
+  <div class="tw" style="max-height:46vh"><table><thead><tr><th>Exam</th><th>Date</th><th>Session</th><th>Dept</th><th>Year</th><th>Subject</th><th>Venue</th><th></th></tr></thead><tbody id="ebody"></tbody></table></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+let M = null, cells = {};
+function subOpts(dept, year, selected) { return '<option value="">—</option>' + M.subjects.filter(s => s.department_id == dept && s.year_no == year).map(s => `<option value="${s.id}" ${s.id == selected ? 'selected' : ''}>${esc(s.code)}</option>`).join(''); }
+async function boot() { M = await api('/admin/api/schedule/meta');
+  $('#tsec').innerHTML += M.sections.map(s => `<option value="${s.id}">${esc(s.dept)} · Year ${s.year_no} · ${esc(s.name)}</option>`).join('');
+  $('#edept').innerHTML += M.departments.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join(''); loadExams(); }
+$('#tsec').onchange = async () => { const id = $('#tsec').value; if (!id) return; const sec = M.sections.find(s => s.id == id);
+  const r = await api('/admin/api/schedule/timetable?section=' + id); cells = {}; r.cells.forEach(c => cells[c.day_no + '-' + c.period_no] = c);
+  $('#thead').innerHTML = '<tr><th>Day</th>' + M.periods.map((p, i) => `<th>P${i + 1}<br><small>${p}</small></th>`).join('') + '</tr>';
+  $('#tbody').innerHTML = M.days.map((d, di) => `<tr><td><b>${d}</b></td>` + M.periods.map((_, pi) => { const c = cells[(di + 1) + '-' + (pi + 1)] || {};
+    return `<td style="min-width:120px"><select class="inp ts" data-k="${di + 1}-${pi + 1}" style="padding:6px">${subOpts(sec.department_id, sec.year_no, c.subject_id)}</select>` +
+      `<input class="inp tl" data-k="${di + 1}-${pi + 1}" placeholder="label" value="${esc(c.subject_id ? '' : (c.label || ''))}" style="padding:5px 8px;margin-top:4px"><input class="inp tr" data-k="${di + 1}-${pi + 1}" placeholder="room" value="${esc(c.room || '')}" style="padding:5px 8px;margin-top:4px"></td>`; }).join('') + '</tr>').join('');
+  $('#tsave').disabled = false; };
+$('#tsave').onclick = async e => { busy(e.target, true); const out = [];
+  $$('.ts').forEach(s => { const k = s.dataset.k, [d, p] = k.split('-'), l = $(`.tl[data-k="${k}"]`).value, r = $(`.tr[data-k="${k}"]`).value; if (s.value || l) out.push({ day: d, period: p, subject_id: s.value, label: l, room: r }); });
+  try { const r = await api('/admin/api/schedule/timetable', 'POST', { section: $('#tsec').value, cells: out }); toast(`Saved ${r.saved} periods ✔`); } catch (err) { toast(err.message, 'err'); } busy(e.target, false); };
+function esubs() { const d = $('#edept').value, y = $('#eyear').value; $('#esub').innerHTML = '<option value="">Subject…</option>' + (d && y ? M.subjects.filter(s => s.department_id == d && s.year_no == y).map(s => `<option value="${s.id}">${esc(s.code)} – ${esc(s.name)}</option>`).join('') : ''); loadExams(); }
+$('#edept').onchange = $('#eyear').onchange = esubs;
+async function loadExams() { const r = await api('/admin/api/schedule/exams?' + new URLSearchParams({ dept: $('#edept').value, year: $('#eyear').value }));
+  $('#ebody').innerHTML = r.rows.length ? r.rows.map(x => `<tr><td>${esc(x.exam_type)}</td><td>${esc(x.exam_date)}</td><td>${esc(x.session)}</td><td>${esc(x.dept)}</td><td>${x.year_no}</td><td>${esc(x.subject_code)} – ${esc(x.subject_name)}</td><td>${esc(x.venue || '–')}</td><td><button class="btn danger sm" data-del="${x.id}">✖</button></td></tr>`).join('') : '<tr><td colspan="8" class="empty">No exams scheduled.</td></tr>'; }
+$('#eadd').onclick = async () => { try { await api('/admin/api/schedule/exams', 'POST', { subject_id: $('#esub').value, exam_type: $('#etype').value, exam_date: $('#edate').value, session: $('#eses').value, venue: $('#evenue').value }); toast('Saved ✔'); loadExams(); } catch (e) { toast(e.message, 'err'); } };
+document.addEventListener('click', async e => { const b = e.target.closest('[data-del]'); if (!b) return; try { await api('/admin/api/schedule/exams/' + b.dataset.del, 'DELETE'); loadExams(); } catch (err) { toast(err.message, 'err'); } });
+boot().catch(e => toast(e.message, 'err'));
+</script>
+{% endblock %}

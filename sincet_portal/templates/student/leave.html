@@ -1,0 +1,30 @@
+{% extends "student/_shell.html" %}
+{% block title %}Leave / OD – SINCET{% endblock %}
+{% block heading %}🗓️ Leave / OD request{% endblock %}
+{% block content %}
+<div class="grid g2">
+  <div class="card glass rise d1"><h3>New request</h3>
+    <div class="field"><label>Type</label><select class="inp" id="kind"><option value="Leave">Leave</option><option value="OD">On-Duty (OD)</option></select></div>
+    <div class="grid g2" style="gap:12px"><div class="field"><label>From</label><input class="inp" type="date" id="from" value="{{ today }}"></div>
+      <div class="field"><label>To</label><input class="inp" type="date" id="to" value="{{ today }}"></div></div>
+    <div class="field"><label>Reason</label><input class="inp" id="reason" maxlength="300" placeholder="e.g. Symposium at another college"></div>
+    <p class="muted" style="margin:0 0 12px"><small>When your faculty approves an OD, it is marked <b>Present</b> in attendance automatically (also for classes held later on those days). An approved leave is tagged as excused.</small></p>
+    <button class="btn" id="go">Send for approval</button></div>
+  <div class="card glass rise d2"><h3>My requests</h3>
+    <div class="tw"><table><thead><tr><th>Type</th><th>Dates</th><th>Status</th><th></th></tr></thead><tbody>
+    {% for r in rows %}<tr><td>{{ r.kind }}</td><td>{{ r.from_date }}{% if r.to_date != r.from_date %} → {{ r.to_date }}{% endif %}</td>
+      <td><span class="pill {{ {'approved':'good','rejected':'danger','pending':'info','cancelled':'warn'}[r.status] }}" title="{{ r.note or '' }}">{{ r.status|title }}</span>{% if r.note %}<br><small class="muted" style="white-space:normal">{{ r.note }}</small>{% endif %}</td>
+      <td>{% if r.status == 'pending' %}<button class="btn ghost sm" data-cancel="{{ r.id }}">Cancel</button>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="4" class="empty">No requests yet.</td></tr>{% endfor %}</tbody></table></div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+$('#go').onclick = async e => { const b = e.target; busy(b, true);
+  try { const d = await api('/student/api/leave', 'POST', { kind: $('#kind').value, from_date: $('#from').value, to_date: $('#to').value, reason: $('#reason').value });
+    toast(d.message); setTimeout(() => location.reload(), 700);
+  } catch (err) { toast(err.message, 'err'); busy(b, false); } };
+document.addEventListener('click', async e => { const b = e.target.closest('[data-cancel]'); if (!b) return;
+  try { await api(`/student/api/leave/${b.dataset.cancel}/cancel`, 'POST', {}); location.reload(); } catch (err) { toast(err.message, 'err'); } });
+</script>
+{% endblock %}

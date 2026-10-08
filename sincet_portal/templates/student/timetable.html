@@ -1,0 +1,16 @@
+{% extends "student/_shell.html" %}
+{% block title %}Timetable & Exams – SINCET{% endblock %}
+{% block heading %}🕒 Timetable &amp; exam schedule{% endblock %}
+{% block content %}
+<div class="card glass rise d1"><h3>Class timetable</h3>
+  {% if grid %}<div class="tw"><table><thead><tr><th>Day</th>{% for t in period_times %}<th>P{{ loop.index }}<br><small>{{ t }}</small></th>{% endfor %}</tr></thead><tbody>
+  {% for d in day_names %}{% set di = loop.index %}<tr style="{{ 'background:rgba(59,130,246,.15)' if di == today_no }}"><td><b>{{ d }}</b></td>
+    {% for t in period_times %}{% set c = grid.get((di, loop.index)) %}<td>{% if c %}<b>{{ c.code or c.label }}</b>{% if c.room %}<br><small class="muted">{{ c.room }}</small>{% endif %}{% else %}–{% endif %}</td>{% endfor %}</tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="empty">Your timetable has not been published yet.</p>{% endif %}</div>
+<div class="card glass rise d2" style="margin-top:18px"><h3>Exam schedule</h3>
+  {% if exams %}<div class="bar">{% for et in exam_types %}<a class="btn sm" href="{{ url_for('feat.student_hallticket', exam_type=et) }}" target="_blank">🎫 Hall ticket – {{ et }}</a>{% endfor %}</div>
+  {% if dues_block %}<p class="muted"><small>Hall tickets are released only when there are no pending fees.</small></p>{% endif %}
+  <div class="tw"><table><thead><tr><th>Exam</th><th>Date</th><th>Session</th><th>Subject</th><th>Venue</th></tr></thead><tbody>
+  {% for e in exams %}<tr><td>{{ e.exam_type }}</td><td>{{ e.exam_date }}</td><td>{{ e.session }}</td><td>{{ e.code }} – {{ e.name }}</td><td>{{ e.venue or '–' }}</td></tr>{% endfor %}</tbody></table></div>
+  {% else %}<p class="empty">No exams scheduled yet.</p>{% endif %}</div>
+{% endblock %}

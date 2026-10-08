@@ -1,0 +1,42 @@
+{% extends "faculty/_shell.html" %}
+{% block title %}Study materials – SINCET{% endblock %}
+{% block heading %}📚 Study materials{% endblock %}
+{% block content %}
+<div class="grid g2">
+<div class="card glass rise d1"><h3>Upload notes / material</h3>
+  <div class="bar"><select class="inp" id="dept">{% for d in depts %}<option value="{{ d.id }}" {{ 'selected' if d.id == me.department_id }}>{{ d.name }}</option>{% endfor %}</select>
+    <select class="inp" id="year">{% for i in range(1,5) %}<option value="{{ i }}">Year {{ i }}</option>{% endfor %}</select></div>
+  <div class="bar"><select class="inp" id="section"><option value="">All sections</option></select><select class="inp" id="subject" style="flex:2"><option value="">Subject…</option></select></div>
+  <div class="grid g2" style="gap:12px"><div class="field" style="grid-column:span 1"><label>Title</label><input class="inp" id="title" maxlength="150" placeholder="e.g. Unit 2 – Decision Trees"></div>
+    <div class="field"><label>Unit (optional)</label><select class="inp" id="unit"><option value="">–</option>{% for i in range(1,6) %}<option>{{ i }}</option>{% endfor %}</select></div></div>
+  <div class="field"><label>Description (optional)</label><input class="inp" id="desc" maxlength="500"></div>
+  <div class="field"><label>File <small class="muted">({{ exts|join(', ') }} · max {{ max_mb }} MB)</small></label><input type="file" id="file"></div>
+  <button class="btn" id="up">⬆ Upload</button></div>
+<div class="card glass rise d2"><h3>My uploads</h3><div class="tw" style="max-height:420px"><table><thead><tr><th>Title</th><th>Class</th><th>Size</th><th>⬇</th><th></th></tr></thead><tbody id="list"></tbody></table></div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function opts() { $('#section').innerHTML = '<option value="">All sections</option>'; $('#subject').innerHTML = '<option value="">Subject…</option>';
+  try { const r = await api(`/faculty/api/options?dept=${$('#dept').value}&year=${$('#year').value}`);
+    $('#section').innerHTML += r.sections.map(s => `<option value="${s.id}">Section ${esc(s.name)}</option>`).join('');
+    $('#subject').innerHTML += r.subjects.map(s => `<option value="${s.id}">${esc(s.code)} – ${esc(s.name)}</option>`).join(''); } catch (e) { toast(e.message, 'err'); } }
+$('#dept').onchange = $('#year').onchange = opts; opts();
+async function list() { const r = await api('/faculty/api/materials');
+  $('#list').innerHTML = r.rows.length ? r.rows.map(m => `<tr><td><b>${esc(m.title)}</b>${m.unit_no ? ` <span class="pill info">Unit ${m.unit_no}</span>` : ''}<br><a href="/faculty/materials/${m.id}/file"><small>${esc(m.file_name)}</small></a></td>` +
+    `<td>${esc(m.subject_code)} · Y${m.year_no}${m.section_name ? ' ' + esc(m.section_name) : ''}</td><td>${esc(m.size)}</td><td>${m.downloads}</td>` +
+    `<td><button class="btn danger sm" data-del="${m.id}">✖</button></td></tr>`).join('') : '<tr><td colspan="5" class="empty">Nothing uploaded yet.</td></tr>'; }
+list().catch(e => toast(e.message, 'err'));
+$('#up').onclick = async e => {
+  const f = $('#file').files[0]; if (!f) return toast('Choose a file first', 'err');
+  const fd = new FormData(); fd.append('file', f);
+  for (const [k, id] of [['dept','dept'],['year','year'],['section','section'],['subject','subject'],['title','title'],['unit','unit'],['description','desc']]) fd.append(k, $('#' + id).value);
+  busy(e.target, true);
+  try { const res = await fetch('/faculty/api/materials', { method: 'POST', headers: { 'X-CSRF-Token': CSRF, 'X-Requested-With': 'fetch' }, body: fd });
+    const d = await res.json(); if (!res.ok || d.ok === false) throw new Error(d.error || 'Upload failed');
+    toast('Uploaded – students can download it now ✔'); $('#title').value = ''; $('#desc').value = ''; $('#file').value = ''; list();
+  } catch (err) { toast(err.message, 'err'); } busy(e.target, false); };
+document.addEventListener('click', async e => { const d = e.target.closest('[data-del]');
+  if (d && confirm('Delete this material?')) { try { await api(`/faculty/api/materials/${d.dataset.del}`, 'DELETE'); list(); } catch (err) { toast(err.message, 'err'); } } });
+</script>
+{% endblock %}

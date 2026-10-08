@@ -1,0 +1,44 @@
+{% extends "student/_shell.html" %}
+{% block title %}Faculty feedback – SINCET{% endblock %}
+{% block heading %}⭐ Faculty feedback{% endblock %}
+{% block content %}
+<div class="tip info rise d1" style="margin-bottom:16px">🔒 Your feedback is <b>anonymous</b> – faculty and admin only see averages, never who rated. Rate honestly from 1 (poor) to 5 (excellent).</div>
+{% for s in surveys %}
+<div class="card glass rise d2" style="margin-bottom:16px">
+  <h3>{{ s.title }} {% if s.live %}<span class="pill good">Open{% if s.closes_on %} · till {{ s.closes_on }}{% endif %}</span>{% else %}<span class="pill danger">Closed</span>{% endif %}</h3>
+  <div class="tw"><table><thead><tr><th>Faculty</th><th>Subject</th><th style="width:140px">Status</th></tr></thead><tbody>
+  {% for it in s.rows %}
+  <tr><td><b>{{ it.faculty }}</b></td><td>{{ it.subject_code }} <small class="muted">{{ it.subject }}</small></td>
+    <td>{% if it.done %}<span class="pill good">✔ Submitted</span>{% elif s.live %}<button class="btn sm" data-rate="{{ it.id }}" data-name="{{ it.faculty }} · {{ it.subject_code }}">Rate now</button>{% else %}<span class="pill warn">Missed</span>{% endif %}</td></tr>
+  {% endfor %}</tbody></table></div>
+</div>
+{% else %}<div class="card glass"><p class="empty">No feedback survey is open for your class right now.</p></div>{% endfor %}
+
+<div class="modal" id="rateModal"><div class="box glass" style="max-width:560px;width:94%">
+  <h3 id="rTitle">Rate</h3>
+  {% for k, label in questions %}
+  <div class="field"><label>{{ loop.index }}. {{ label }}</label>
+    <div class="stars" data-q="{{ k }}">{% for i in range(1,6) %}<button type="button" class="star" data-v="{{ i }}" aria-label="{{ i }} stars">★</button>{% endfor %}</div></div>
+  {% endfor %}
+  <div class="field"><label>Comment (optional)</label><input class="inp" id="rComment" maxlength="500" placeholder="What went well? What can improve?"></div>
+  <div class="row-end"><button class="btn ghost" data-close>Cancel</button><button class="btn good" id="rSend">Submit feedback</button></div>
+</div></div>
+{% endblock %}
+{% block head %}<style>
+.stars{display:flex;gap:6px}.star{background:none;border:0;font-size:1.9rem;line-height:1;color:rgba(255,255,255,.25);cursor:pointer;padding:0 2px;transition:transform .15s,color .15s}
+.star:hover{transform:scale(1.2)}.star.on{color:#f5b942;text-shadow:0 0 14px rgba(245,185,66,.55)}
+</style>{% endblock %}
+{% block scripts %}
+<script>
+let item = null; const val = {};
+function paint(q) { $$(`.stars[data-q="${q}"] .star`).forEach(s => s.classList.toggle('on', +s.dataset.v <= (val[q] || 0))); }
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-rate]'), s = e.target.closest('.star');
+  if (b) { item = b.dataset.rate; $('#rTitle').textContent = 'Rate ' + b.dataset.name; Object.keys(val).forEach(k => delete val[k]); $$('.stars').forEach(x => paint(x.dataset.q)); $('#rComment').value = ''; openModal('rateModal'); }
+  if (s) { const q = s.closest('.stars').dataset.q; val[q] = +s.dataset.v; paint(q); }
+});
+$('#rSend').onclick = async e => { busy(e.target, true);
+  try { const r = await api(`/student/api/feedback/${item}`, 'POST', { ...val, comment: $('#rComment').value }); toast(r.message); closeModal('rateModal'); setTimeout(() => location.reload(), 800); }
+  catch (err) { toast(err.message, 'err'); busy(e.target, false); } };
+</script>
+{% endblock %}

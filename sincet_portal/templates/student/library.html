@@ -1,0 +1,35 @@
+{% extends "student/_shell.html" %}
+{% block title %}Library – SINCET{% endblock %}
+{% block heading %}📖 Library{% endblock %}
+{% block content %}
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
+  <div class="stat glass rise d1" style="--c:#3b82f6"><div class="ic">📘</div><div class="num">{{ current|length }} / {{ max_books }}</div><div class="lbl">Books with me</div></div>
+  <div class="stat glass rise d2" style="--c:#f43f5e"><div class="ic">⏰</div><div class="num">{{ current|selectattr('overdue_days')|list|length }}</div><div class="lbl">Overdue</div></div>
+  <div class="stat glass rise d2" style="--c:#f5b942"><div class="ic">₹</div><div class="num">{{ '%g'|format(unpaid + live) }}</div><div class="lbl">Fine to pay</div></div>
+</div>
+<p class="muted">Loan period {{ loan_days }} days · fine ₹{{ '%g'|format(fine) }} per day after the due date. Pay fines at the library counter.</p>
+{% if unpaid + live > 0 %}<div class="tip warn">You have library dues of <b>₹{{ '%g'|format(unpaid + live) }}</b>. New books will not be issued until they are cleared.</div>{% endif %}
+
+<div class="card glass rise d2" style="margin:16px 0"><h3>My issued books</h3>
+  <div class="tw"><table><thead><tr><th>Book</th><th>Issued</th><th>Due</th><th>Status</th><th>Fine</th></tr></thead><tbody>
+  {% for r in current %}<tr><td><b>{{ r.title }}</b><br><small class="muted">{{ r.author }} · {{ r.accession_no }}</small></td><td>{{ r.issued_on }}</td><td>{{ r.due_on }}</td>
+    <td>{% if r.overdue_days %}<span class="pill danger">{{ r.overdue_days }} days overdue</span>{% elif r.days_left <= 3 %}<span class="pill warn">due in {{ r.days_left }} d</span>{% else %}<span class="pill good">{{ r.days_left }} days left</span>{% endif %}</td>
+    <td>{{ '₹%g'|format(r.live_fine) if r.live_fine else '–' }}</td></tr>
+  {% else %}<tr><td colspan="5" class="empty">You have no books issued.</td></tr>{% endfor %}</tbody></table></div></div>
+
+<div class="card glass rise d3" style="margin-bottom:16px"><h3>Search the catalogue</h3>
+  <input class="inp" id="q" placeholder="🔍 Title, author, category…" style="margin-bottom:10px">
+  <div class="tw" style="max-height:360px"><table><thead><tr><th>Book</th><th>Category</th><th>Rack</th><th>Availability</th></tr></thead><tbody id="cat"></tbody></table></div></div>
+
+<div class="card glass rise d4"><h3>History</h3><div class="tw" style="max-height:300px"><table><thead><tr><th>Book</th><th>Issued</th><th>Returned</th><th>Fine</th></tr></thead><tbody>
+  {% for r in history %}<tr><td>{{ r.title }}</td><td>{{ r.issued_on }}</td><td>{{ r.returned_on }}</td>
+    <td>{% if r.fine_amount %}₹{{ '%g'|format(r.fine_amount) }} <span class="pill {{ {'due':'warn','paid':'good','waived':'info'}.get(r.fine_status,'info') }}">{{ r.fine_status }}</span>{% else %}–{% endif %}</td></tr>
+  {% else %}<tr><td colspan="4" class="empty">No returned books yet.</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function cat() { try { const r = await api('/student/api/library/books?q=' + encodeURIComponent($('#q').value));
+  $('#cat').innerHTML = r.rows.length ? r.rows.map(b => `<tr><td><b>${esc(b.title)}</b><br><small class="muted">${esc(b.author)}</small></td><td>${esc(b.category)}</td><td>${esc(b.rack || '–')}</td><td><span class="pill ${b.available ? 'good' : 'danger'}">${b.available ? b.available + ' available' : 'All issued'}</span></td></tr>`).join('') : '<tr><td colspan="4" class="empty">No books found.</td></tr>'; } catch (e) { toast(e.message, 'err'); } }
+$('#q').oninput = debounce(cat); cat();
+</script>
+{% endblock %}

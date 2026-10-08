@@ -1,0 +1,28 @@
+{% extends "student/_shell.html" %}
+{% block title %}Mark attendance – SINCET{% endblock %}
+{% block heading %}📷 QR attendance{% endblock %}
+{% block content %}
+<div class="card glass rise d1 center" style="max-width:480px;margin:30px auto">
+  <div id="icon" style="font-size:3rem">⏳</div>
+  <h3 id="msg">{% if code %}Marking your attendance…{% else %}Invalid QR{% endif %}</h3>
+  <p class="muted" id="sub">{% if code %}Please wait, checking your class, GPS location and college Wi-Fi.{% else %}Scan the QR shown on the classroom screen again.{% endif %}</p>
+  <a class="btn" href="{{ url_for('student_dashboard') }}">Go to dashboard</a>
+</div>
+{% endblock %}
+{% block scripts %}
+{% if code %}
+<script>
+const DEV = (() => { try { let d = localStorage.getItem('sincet_dev'); if (!d) { d = (crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('')); localStorage.setItem('sincet_dev', d); } return d; } catch (e) { return ''; } })();
+const getPos = () => new Promise(res => { if (!navigator.geolocation) return res(null); navigator.geolocation.getCurrentPosition(p => res(p.coords), () => res(null), { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }); });
+(async () => {
+  try {
+    const st = await api('/student/api/attendance/status');
+    const body = { code: '{{ code }}', device: DEV };
+    const c = await getPos(); if (c) { body.lat = c.latitude; body.lon = c.longitude; body.accuracy = c.accuracy; }
+    const r = await api('/student/api/attendance/mark', 'POST', body);
+    $('#icon').textContent = '✅'; $('#msg').textContent = r.message; $('#sub').textContent = r.subject ? 'Subject: ' + r.subject : '';
+  } catch (e) { $('#icon').textContent = '❌'; $('#msg').textContent = 'Could not mark attendance'; $('#sub').textContent = e.message; }
+})();
+</script>
+{% endif %}
+{% endblock %}

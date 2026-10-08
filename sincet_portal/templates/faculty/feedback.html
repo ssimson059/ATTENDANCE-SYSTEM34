@@ -1,0 +1,21 @@
+{% extends "faculty/_shell.html" %}
+{% block title %}My feedback – SINCET{% endblock %}
+{% block heading %}⭐ Student feedback about me{% endblock %}
+{% block content %}
+<div class="tip info rise d1" style="margin-bottom:16px">🔒 Ratings are anonymous. A report appears after at least <b>{{ min_resp }}</b> students have responded, so nobody can be identified.</div>
+{% for r in rows %}
+<div class="card glass rise d2" style="margin-bottom:16px">
+  <h3>{{ r.subject_code }} – {{ r.subject }} <small class="muted">· {{ r.survey }}</small>
+    {% if r.hidden %}<span class="pill warn">{{ r.n }} / {{ min_resp }} responses needed</span>
+    {% else %}<span class="pill {{ 'good' if r.overall >= 4 else ('warn' if r.overall >= 3 else 'danger') }}">★ {{ '%.2f'|format(r.overall) }} / 5</span> <span class="pill info">{{ r.n }} responses</span>{% endif %}</h3>
+  {% if not r.hidden %}
+  {% for (k, label) in questions %}
+  <div style="display:grid;grid-template-columns:minmax(150px,1.2fr) 3fr 44px;gap:10px;align-items:center;margin:8px 0">
+    <span>{{ label }}</span><div style="height:9px;border-radius:9px;background:rgba(255,255,255,.1);overflow:hidden"><div style="height:100%;width:{{ (r.avgs[loop.index0] / 5 * 100)|round(0) }}%;background:linear-gradient(90deg,#3b82f6,#22d3ee)"></div></div><b>{{ '%.1f'|format(r.avgs[loop.index0]) }}</b></div>
+  {% endfor %}
+  {% if r.comments %}<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">💬 {{ r.comments|length }} anonymous comments</summary>
+    <ul>{% for c in r.comments %}<li>{{ c }}</li>{% endfor %}</ul></details>{% endif %}
+  {% endif %}
+</div>
+{% else %}<div class="card glass"><p class="empty">No feedback survey includes you yet.</p></div>{% endfor %}
+{% endblock %}

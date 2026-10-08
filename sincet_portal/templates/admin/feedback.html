@@ -1,0 +1,52 @@
+{% extends "admin/layout.html" %}
+{% block title %}Faculty feedback – SINCET{% endblock %}
+{% block heading %}⭐ Faculty feedback survey{% endblock %}
+{% block content %}
+<div class="grid g2">
+<div class="card glass rise d1"><h3>Create a survey</h3>
+  <div class="field"><label>Title</label><input class="inp" id="title" maxlength="120" placeholder="e.g. Semester 5 – Mid-term feedback"></div>
+  <div class="bar"><select class="inp" id="dept">{% for d in depts %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select>
+    <select class="inp" id="year">{% for i in range(1,5) %}<option value="{{ i }}">Year {{ i }}</option>{% endfor %}</select>
+    <select class="inp" id="section"><option value="">All sections</option></select></div>
+  <div class="field"><label>Closes on (optional)</label><input class="inp" type="date" id="closes"></div>
+  <label class="muted" style="font-size:.8rem">Choose the faculty teaching each subject (leave “–” to skip a subject)</label>
+  <div id="pairs" style="margin:8px 0"></div>
+  <button class="btn" id="create">Open survey for students</button></div>
+<div class="card glass rise d2"><h3>Surveys</h3><div class="tw" style="max-height:430px"><table><thead><tr><th>Survey</th><th>Class</th><th>Responses</th><th>Status</th><th></th></tr></thead><tbody id="list"></tbody></table></div></div>
+</div>
+<div class="card glass rise d3" style="margin-top:18px;display:none" id="repCard"><h3 id="repTitle"></h3>
+  <div class="tw"><table><thead><tr><th>Faculty</th><th>Subject</th><th>Resp.</th>{% for k, l in questions %}<th title="{{ l }}">Q{{ loop.index }}</th>{% endfor %}<th>Overall</th></tr></thead><tbody id="repBody"></tbody></table></div>
+  <p class="muted"><small>{% for k, l in questions %}Q{{ loop.index }} {{ l }}{{ ' · ' if not loop.last }}{% endfor %} · Student identities are never stored with ratings.</small></p>
+  <div class="row-end"><a class="btn ghost sm" id="repCsv">⬇ Export CSV</a></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function setup() { try { const r = await api(`/admin/api/feedback/setup?dept=${$('#dept').value}&year=${$('#year').value}`);
+  $('#section').innerHTML = '<option value="">All sections</option>' + r.sections.map(s => `<option value="${s.id}">Section ${esc(s.name)}</option>`).join('');
+  const fac = '<option value="">–</option>' + r.faculty.map(f => `<option value="${f.id}">${esc(f.name)} (${esc(f.username)})</option>`).join('');
+  $('#pairs').innerHTML = r.subjects.length ? r.subjects.map(s => `<div class="bar" style="margin:6px 0"><span style="flex:1.2;align-self:center">${esc(s.code)} <small class="muted">${esc(s.name)}</small></span><select class="inp pf" data-s="${s.id}" style="flex:1.4">${fac}</select></div>`).join('') : '<p class="empty">No subjects for this year.</p>'; } catch (e) { toast(e.message, 'err'); } }
+$('#dept').onchange = $('#year').onchange = setup; setup();
+async function list() { const r = await api('/admin/api/feedback');
+  $('#list').innerHTML = r.rows.length ? r.rows.map(s => `<tr><td><b>${esc(s.title)}</b></td><td>${esc(s.dept)} · Y${s.year_no}${s.section_name ? ' ' + esc(s.section_name) : ''}</td><td>${s.responses}</td>` +
+    `<td><span class="pill ${s.live ? 'good' : 'danger'}">${s.live ? 'Open' : 'Closed'}</span></td>` +
+    `<td><div class="acts"><button class="btn sm" data-rep="${s.id}">Report</button><button class="btn ghost sm" data-tg="${s.id}">${s.is_open ? 'Close' : 'Reopen'}</button><button class="btn danger sm" data-del="${s.id}">✖</button></div></td></tr>`).join('') : '<tr><td colspan="5" class="empty">No surveys yet.</td></tr>'; }
+list().catch(e => toast(e.message, 'err'));
+$('#create').onclick = async e => { busy(e.target, true);
+  const items = $$('.pf').filter(x => x.value).map(x => ({ subject: x.dataset.s, faculty: x.value }));
+  try { await api('/admin/api/feedback', 'POST', { title: $('#title').value, dept: $('#dept').value, year: $('#year').value, section: $('#section').value, closes_on: $('#closes').value, items });
+    toast('Survey is live for students ✔'); $('#title').value = ''; list(); } catch (err) { toast(err.message, 'err'); } busy(e.target, false); };
+document.addEventListener('click', async e => {
+  const r = e.target.closest('[data-rep]'), t = e.target.closest('[data-tg]'), d = e.target.closest('[data-del]');
+  try {
+    if (r) { const x = await api(`/admin/api/feedback/${r.dataset.rep}/report`); $('#repCard').style.display = '';
+      $('#repTitle').textContent = `${x.title} · ${x.eligible} eligible students`; $('#repCsv').href = `/admin/feedback/${r.dataset.rep}/export.csv`;
+      const cls = v => v == null ? '' : v >= 4 ? 'good' : v >= 3 ? 'warn' : 'danger';
+      $('#repBody').innerHTML = x.rows.map(i => `<tr><td><b>${esc(i.faculty)}</b></td><td>${esc(i.subject_code)}</td><td>${i.n}</td>` +
+        i.avgs.map(a => `<td>${a == null ? '–' : a.toFixed(2)}</td>`).join('') + `<td><span class="pill ${cls(i.overall)}">${i.overall == null ? '–' : '★ ' + i.overall.toFixed(2)}</span></td></tr>` +
+        (i.comments.length ? `<tr><td colspan="${i.avgs.length + 4}" style="white-space:normal"><small class="muted">💬 ${i.comments.map(esc).join(' · ')}</small></td></tr>` : '')).join('');
+      $('#repCard').scrollIntoView({ behavior: 'smooth' }); }
+    if (t) { await api(`/admin/api/feedback/${t.dataset.tg}/toggle`, 'POST', {}); list(); }
+    if (d && confirm('Delete this survey and all its responses?')) { await api(`/admin/api/feedback/${d.dataset.del}`, 'DELETE'); $('#repCard').style.display = 'none'; list(); }
+  } catch (err) { toast(err.message, 'err'); } });
+</script>
+{% endblock %}

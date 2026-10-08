@@ -1,0 +1,26 @@
+{% extends "faculty/_shell.html" %}
+{% block title %}Leave / OD approvals – SINCET{% endblock %}
+{% block heading %}🗓️ Leave / OD approvals{% endblock %}
+{% block content %}
+<div class="card glass rise d1">
+  <div class="bar"><select class="inp" id="st" style="max-width:200px"><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="">All</option></select></div>
+  <div class="tw"><table><thead><tr><th>Student</th><th>Class</th><th>Type</th><th>Dates</th><th>Reason</th><th>Status</th><th></th></tr></thead><tbody id="body"></tbody></table></div>
+  <p class="muted"><small>Approving an <b>OD</b> marks the student Present for classes already held on those days and for classes closed later. Approved <b>Leave</b> is tagged as excused.</small></p></div>
+<div class="modal" id="rejM"><div class="box glass"><h3>Reject request</h3><div class="field"><label>Reason (shown to the student)</label><input class="inp" id="note" maxlength="200"></div>
+  <div class="row-end"><button class="btn ghost" data-close>Cancel</button><button class="btn danger" id="rejGo">Reject</button></div></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+let rej = null; const PILL = { approved: 'good', rejected: 'danger', pending: 'info', cancelled: 'warn' };
+async function load() { const r = await api('/faculty/api/leave?status=' + $('#st').value);
+  $('#body').innerHTML = r.rows.length ? r.rows.map(x => `<tr><td>${esc(x.username)}<br><small class="muted">${esc(x.name)}</small></td><td>Y${x.year_no || '-'} ${esc(x.section_name || '')}</td><td>${esc(x.kind)}</td>` +
+    `<td>${esc(x.from_date)}${x.to_date !== x.from_date ? ' → ' + esc(x.to_date) : ''}</td><td style="white-space:normal;max-width:260px">${esc(x.reason)}</td>` +
+    `<td><span class="pill ${PILL[x.status]}">${esc(x.status)}</span></td>` +
+    `<td>${x.status === 'pending' ? `<div class="acts"><button class="btn good sm" data-ok="${x.id}">✔ Approve</button><button class="btn danger sm" data-no="${x.id}">✖</button></div>` : ''}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">Nothing here.</td></tr>'; }
+$('#st').onchange = () => load().catch(e => toast(e.message, 'err')); load().catch(e => toast(e.message, 'err'));
+document.addEventListener('click', async e => { const a = e.target.closest('[data-ok]'), n = e.target.closest('[data-no]');
+  try { if (a) { const r = await api(`/faculty/api/leave/${a.dataset.ok}/review`, 'POST', { action: 'approve' }); toast(`Approved · ${r.updated} attendance record(s) updated`); load(); }
+    if (n) { rej = n.dataset.no; $('#note').value = ''; openModal('rejM'); } } catch (err) { toast(err.message, 'err'); } });
+$('#rejGo').onclick = async () => { try { await api(`/faculty/api/leave/${rej}/review`, 'POST', { action: 'reject', note: $('#note').value }); closeModal('rejM'); load(); } catch (err) { toast(err.message, 'err'); } };
+</script>
+{% endblock %}

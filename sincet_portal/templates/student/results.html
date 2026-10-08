@@ -1,0 +1,21 @@
+{% extends "student/_shell.html" %}
+{% block title %}Results – SINCET{% endblock %}
+{% block heading %}🎓 Results &amp; CGPA{% endblock %}
+{% block content %}
+{% if res.semesters %}
+<div class="grid g3">
+  <div class="card glass rise d1"><small class="muted">CGPA</small><h2 style="margin:6px 0 0">{{ '%.2f'|format(res.cgpa) }}</h2></div>
+  <div class="card glass rise d1"><small class="muted">Credits</small><h2 style="margin:6px 0 0">{{ res.credits }}</h2></div>
+  <div class="card glass rise d1"><small class="muted">Arrears</small><h2 style="margin:6px 0 0">{{ res.arrears }}</h2></div>
+</div>
+<div class="bar" style="margin-top:16px"><a class="btn" href="{{ url_for('feat.student_marksheet') }}" target="_blank">📄 Download mark sheet (all semesters)</a></div>
+{% for s in res.semesters %}
+<div class="card glass rise d2" style="margin-top:14px"><h3>Semester {{ s.semester or '–' }} · GPA {{ '%.2f'|format(s.gpa) }}
+  <a class="btn ghost sm" style="float:right" href="{{ url_for('feat.student_marksheet', sem=s.semester) }}" target="_blank">PDF</a></h3>
+  <div class="tw"><table><thead><tr><th>Code</th><th>Subject</th><th>Credits</th><th>Marks</th><th>%</th><th>Grade</th><th>Result</th></tr></thead><tbody>
+  {% for x in s.subjects %}<tr><td>{{ x.code }}</td><td>{{ x.name }}</td><td>{{ x.credits }}</td><td>{{ x.marks|round(1) }} / {{ x.max_marks|round(0)|int }}</td><td>{{ x.pct }}</td><td><b>{{ x.grade }}</b></td>
+    <td><span class="pill {{ 'good' if x.passed else 'danger' }}">{{ 'Pass' if x.passed else 'Re-appear' }}</span></td></tr>{% endfor %}</tbody></table></div></div>
+{% endfor %}
+<p class="muted" style="margin-top:12px"><small>Based on your Semester exam marks. Scale: {% for f, g, p in grades %}{{ g }} ≥ {{ f }}% ({{ p }}){% if not loop.last %}, {% endif %}{% endfor %}; below {{ grades[-1][0] }}% = U (0). Provisional – the university statement prevails.{% if res.credits_assumed %} Subjects without credits are counted as 3.{% endif %}</small></p>
+{% else %}<div class="card glass"><p class="empty">No Semester results have been published yet.</p></div>{% endif %}
+{% endblock %}

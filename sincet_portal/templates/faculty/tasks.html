@@ -1,0 +1,53 @@
+{% extends "faculty/_shell.html" %}
+{% block title %}Assignments – SINCET{% endblock %}
+{% block heading %}📎 Assignments &amp; submissions{% endblock %}
+{% block content %}
+<div class="grid g2">
+<div class="card glass rise d1"><h3>Post a new assignment</h3>
+  <div class="bar"><select class="inp" id="dept">{% for d in depts %}<option value="{{ d.id }}" {{ 'selected' if d.id == me.department_id }}>{{ d.name }}</option>{% endfor %}</select>
+    <select class="inp" id="year">{% for i in range(1,5) %}<option value="{{ i }}">Year {{ i }}</option>{% endfor %}</select></div>
+  <div class="bar"><select class="inp" id="section"><option value="">All sections</option></select><select class="inp" id="subject" style="flex:2"><option value="">Subject…</option></select></div>
+  <div class="field"><label>Title</label><input class="inp" id="title" maxlength="120"></div>
+  <div class="field"><label>Instructions (optional)</label><input class="inp" id="desc" maxlength="1000"></div>
+  <div class="grid g2" style="gap:12px"><div class="field"><label>Due date</label><input class="inp" type="date" id="due"></div><div class="field"><label>Max marks</label><input class="inp" type="number" id="max" value="10" min="1" max="1000"></div></div>
+  <button class="btn" id="create">Post assignment</button></div>
+<div class="card glass rise d2"><h3>Assignments</h3><div class="tw" style="max-height:340px"><table><thead><tr><th>Title</th><th>Class</th><th>Due</th><th>Sub / Graded</th><th></th></tr></thead><tbody id="list"></tbody></table></div></div>
+</div>
+<div class="card glass rise d3" style="margin-top:18px;display:none" id="gradeCard"><h3 id="gTitle"></h3>
+  <div class="tw" style="max-height:55vh"><table><thead><tr><th>Student</th><th>File</th><th>Submitted</th><th style="width:120px">Marks</th><th>Feedback</th></tr></thead><tbody id="gBody"></tbody></table></div>
+  <div class="row-end"><button class="btn good" id="gSave">💾 Save grades</button></div>
+  <p class="muted"><small>Grades are also added to the student's Assignments marks list.</small></p></div>
+{% endblock %}
+{% block scripts %}
+<script>
+let cur = null, curMax = 0;
+async function opts() { $('#section').innerHTML = '<option value="">All sections</option>'; $('#subject').innerHTML = '<option value="">Subject…</option>';
+  try { const r = await api(`/faculty/api/options?dept=${$('#dept').value}&year=${$('#year').value}`);
+    $('#section').innerHTML += r.sections.map(s => `<option value="${s.id}">Section ${esc(s.name)}</option>`).join('');
+    $('#subject').innerHTML += r.subjects.map(s => `<option value="${s.id}">${esc(s.code)} – ${esc(s.name)}</option>`).join(''); } catch (e) { toast(e.message, 'err'); } }
+$('#dept').onchange = $('#year').onchange = opts; opts();
+async function list() { const r = await api('/faculty/api/tasks');
+  $('#list').innerHTML = r.rows.length ? r.rows.map(t => `<tr><td>${esc(t.title)}</td><td>${esc(t.subject_code)} · Y${t.year_no}${t.section_name ? ' ' + esc(t.section_name) : ''}</td><td>${esc(t.due_date || '–')}</td><td>${t.submitted} / ${t.graded}</td>` +
+    `<td><div class="acts"><button class="btn sm" data-open="${t.id}">Open</button><button class="btn danger sm" data-del="${t.id}">✖</button></div></td></tr>`).join('') : '<tr><td colspan="5" class="empty">No assignments yet.</td></tr>'; }
+list().catch(e => toast(e.message, 'err'));
+$('#create').onclick = async e => { busy(e.target, true);
+  try { await api('/faculty/api/tasks', 'POST', { dept: $('#dept').value, year: $('#year').value, section: $('#section').value, subject: $('#subject').value, title: $('#title').value, description: $('#desc').value, due_date: $('#due').value, max_marks: $('#max').value });
+    toast('Assignment posted ✔'); $('#title').value = ''; list(); } catch (err) { toast(err.message, 'err'); } busy(e.target, false); };
+document.addEventListener('click', async e => {
+  const o = e.target.closest('[data-open]'), d = e.target.closest('[data-del]');
+  try {
+    if (o) { cur = o.dataset.open; const r = await api(`/faculty/api/tasks/${cur}/submissions`); curMax = r.task.max_marks;
+      $('#gradeCard').style.display = ''; $('#gTitle').textContent = `${r.task.title} · ${r.task.subject} · out of ${r.task.max_marks}`;
+      $('#gBody').innerHTML = r.rows.map(s => `<tr><td>${esc(s.username)}<br><small class="muted">${esc(s.name)}</small></td>` +
+        `<td>${s.sub_id ? `<a href="/faculty/submissions/${s.sub_id}/file">${esc(s.file_name)}</a>` : '<span class="pill warn">Not submitted</span>'}</td><td>${esc(s.uploaded_at || '–')}${s.is_late ? ' <span class="pill warn">late</span>' : ''}</td>` +
+        `<td>${s.sub_id ? `<input class="inp gm" type="number" step="0.01" min="0" max="${curMax}" data-id="${s.student_id}" value="${s.marks ?? ''}" style="padding:7px 10px">` : '–'}</td>` +
+        `<td>${s.sub_id ? `<input class="inp gf" maxlength="300" data-id="${s.student_id}" value="${esc(s.feedback || '')}" style="padding:7px 10px">` : ''}</td></tr>`).join('');
+      $('#gradeCard').scrollIntoView({ behavior: 'smooth' }); }
+    if (d && confirm('Delete this assignment and all uploaded files?')) { await api(`/faculty/api/tasks/${d.dataset.del}`, 'DELETE'); $('#gradeCard').style.display = 'none'; list(); }
+  } catch (err) { toast(err.message, 'err'); } });
+$('#gSave').onclick = async e => { busy(e.target, true);
+  const fb = Object.fromEntries($$('.gf').map(i => [i.dataset.id, i.value]));
+  try { const r = await api(`/faculty/api/tasks/${cur}/grade`, 'POST', { entries: $$('.gm').map(i => ({ student_id: i.dataset.id, marks: i.value, feedback: fb[i.dataset.id] || '' })) });
+    toast(`Graded ${r.saved} submissions ✔`); list(); } catch (err) { toast(err.message, 'err'); } busy(e.target, false); };
+</script>
+{% endblock %}

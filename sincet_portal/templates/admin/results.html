@@ -1,0 +1,18 @@
+{% extends "admin/layout.html" %}
+{% block title %}Results – SINCET{% endblock %}
+{% block heading %}🎓 Results &amp; mark sheets{% endblock %}
+{% block content %}
+<div class="card glass rise d1"><div class="bar"><input class="inp" id="u" placeholder="Student ID e.g. STU-CSE-001" maxlength="40" style="max-width:300px"><button class="btn" id="go">Show result</button><a class="btn ghost sm" id="pdf" style="display:none" target="_blank">📄 Mark sheet PDF</a></div>
+  <div id="out" class="muted">Enter a student ID. GPA / CGPA are computed from the <b>Semester</b> exam marks and subject credits.</div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+$('#go').onclick = async () => { const u = $('#u').value.trim(); if (!u) return;
+  try { const r = await api('/admin/api/results?username=' + encodeURIComponent(u)); $('#pdf').href = '/admin/results/marksheet.pdf?username=' + encodeURIComponent(u); $('#pdf').style.display = '';
+    $('#out').innerHTML = `<h3 style="margin:8px 0">${esc(r.student.name)} · ${esc(r.student.dept)} · Year ${r.student.year || '–'} — CGPA <b>${r.res.cgpa ?? '–'}</b> · Credits ${r.res.credits} · Arrears ${r.res.arrears}</h3>` +
+      (r.res.semesters.map(s => `<h4 style="margin:14px 0 6px">Semester ${s.semester || '–'} · GPA ${s.gpa.toFixed(2)}</h4><div class="tw"><table><thead><tr><th>Code</th><th>Subject</th><th>Credits</th><th>Marks</th><th>%</th><th>Grade</th><th>Result</th></tr></thead><tbody>` +
+        s.subjects.map(x => `<tr><td>${esc(x.code)}</td><td>${esc(x.name)}</td><td>${x.credits}</td><td>${x.marks} / ${x.max_marks}</td><td>${x.pct}</td><td><b>${x.grade}</b></td><td><span class="pill ${x.passed ? 'good' : 'danger'}">${x.passed ? 'Pass' : 'Re-appear'}</span></td></tr>`).join('') + '</tbody></table></div>').join('') || '<p class="empty">No Semester marks entered yet.</p>');
+  } catch (e) { $('#pdf').style.display = 'none'; toast(e.message, 'err'); } };
+$('#u').onkeydown = e => { if (e.key === 'Enter') $('#go').click(); };
+</script>
+{% endblock %}
